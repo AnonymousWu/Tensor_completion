@@ -56,9 +56,6 @@ class UnitTests:
         self.test_3d_purturb1()
 
 
-# In[7]:
-
-
 def normalize(Z,r):
     norms = ctf.tensor(r)
     norms.i("u") << Z.i("pu")*Z.i("pu")
@@ -67,9 +64,6 @@ def normalize(Z,r):
     Z.set_zero()
     Z.i("pu") << X.i("pu")*norms.i("u")
     return 1./norms
-
-
-# In[8]:
 
 
 def createOmega(I,J,K,sparsity):
@@ -113,8 +107,7 @@ def getDenseOmega(T,U,V,W,regParam,omega,I,J,K,r,idx,string):
         omega_dense = ctf.astensor(temp)
         #print("before", (omega_dense, omega_dense.shape))
         omega_dense = omega_dense.reshape(J,K,num_nonzero)
-        #print("after", (omega_dense, omega_dense.shape))
-        
+        #print("after", (omega_dense, omega_dense.shape))       
     
     if (string =="j"):
         omega_curr = ctf.to_nparray(omega[:,idx,:].reshape(I*K))
@@ -151,89 +144,75 @@ def getDenseOmega(T,U,V,W,regParam,omega,I,J,K,r,idx,string):
     return num_nonzero,omega_dense
 
 
-# In[9]:
 
 
 def LS_SVD(Z,factor,r,Tbar,regParam,idx):
     [U_,S_,VT_] = ctf.svd(Z)
     S_ = S_/(S_*S_ + regParam*ctf.ones(S_.shape))
-    #print(Tbar)
     factor.set_zero()
     factor.i("r") << VT_.i("kr")*S_.i("k")*U_.i("tk")*Tbar.i("t")
-    #print( VT_.to_nparray().T.shape,S_.to_nparray().shape,U_.to_nparray().T.shape,Tbar.to_nparray().shape)
-    #factor = VT_.to_nparray().T@S_.to_nparray()@U_.to_nparray().T@Tbar.to_nparray()
-    #if Z.shape[0] == 1:
-    #    print("Here", factor,VT_,S_,U_,Tbar)
     
     return factor    
 
-def updateU_SVD(T,U,V,W,regParam,omega,I,J,K,r):
+def updateFactor_SVD(T,U,V,W,regParam,omega,I,J,K,r,string):
 
-    M1 = ctf.tensor((J,K,r))
-    M1.i("jku") << V.i("ju")*W.i("ku")
+    # updateU
+    if (string=="U"):
+        M1 = ctf.tensor((J,K,r))
+        M1.i("jku") << V.i("ju")*W.i("ku")
     
-    for i in range(I):
-        num_nonzero, dense_omega = getDenseOmega(T,U,V,W,regParam,omega,I,J,K,r,i,"i")
+        for i in range(I):
+            num_nonzero, dense_omega = getDenseOmega(T,U,V,W,regParam,omega,I,J,K,r,i,"i")
 
-        Z = ctf.tensor((num_nonzero,r))
-        Z.i("tr") << dense_omega.i("jkt")*M1.i("jkr")
+            Z = ctf.tensor((num_nonzero,r))
+            Z.i("tr") << dense_omega.i("jkt")*M1.i("jkr")
         
-        Tbar = ctf.tensor((num_nonzero))
-        Tbar.i("t") << dense_omega.i("jkt") *T[i,:,:].i("jk")
+            Tbar = ctf.tensor((num_nonzero))
+            Tbar.i("t") << dense_omega.i("jkt") *T[i,:,:].i("jk")
         
-        #print("in",U[i])
-        U[i,:].set_zero()
-        U[i,:] = LS_SVD(Z,U[i,:],r,Tbar,regParam,i)
-        #print("out",U[i])   
- 
-    #print(U)
-    #print(normalize(U,r))
-    #U *= normalize(U,r)
-     
-    return U
-    
-    
-def updateV_SVD(T,U,V,W,regParam,omega,I,J,K,r):
-    '''Update V matrix by using the formula'''
-    
-    M2 = ctf.tensor((I,K,r))
-    M2.i("iku") << U.i("iu")*W.i("ku")
-    
-    for j in range(J):
-        num_nonzero, dense_omega = getDenseOmega(T,U,V,W,regParam,omega,I,J,K,r,j,"j")
-        Z = ctf.tensor((num_nonzero,r))
-        Z.i("tr") << dense_omega.i("ikt")*M2.i("ikr")
-        
-        Tbar = ctf.tensor((num_nonzero))
-        Tbar.i("t") << dense_omega.i("ikt") *T[:,j,:].i("ik")
-        
-        V[j,:].set_zero()
-        V[j,:] = LS_SVD(Z,V[j,:],r,Tbar,regParam,j)
-        
-    #V *= normalize(V,r)
-    
-    return V  
+            #print("in",U[i])
+            U[i,:].set_zero()
+            U[i,:] = LS_SVD(Z,U[i,:],r,Tbar,regParam,i)
 
-def updateW_SVD(T,U,V,W,regParam,omega,I,J,K,r):
-    '''Update V matrix by using the formula'''
+        return U
+
+    if (string == 'V'):
+
+        M2 = ctf.tensor((I,K,r))
+        M2.i("iku") << U.i("iu")*W.i("ku")
     
-    M3 = ctf.tensor((I,J,r))
-    M3.i("iju") << U.i("iu")*V.i("ju")
+        for j in range(J):
+            num_nonzero, dense_omega = getDenseOmega(T,U,V,W,regParam,omega,I,J,K,r,j,"j")
+            Z = ctf.tensor((num_nonzero,r))
+            Z.i("tr") << dense_omega.i("ikt")*M2.i("ikr")
+        
+            Tbar = ctf.tensor((num_nonzero))
+            Tbar.i("t") << dense_omega.i("ikt") *T[:,j,:].i("ik")
+        
+            V[j,:].set_zero()
+            V[j,:] = LS_SVD(Z,V[j,:],r,Tbar,regParam,j)
+
+        return V
+
+    if (string == 'W'):
+
+        M3 = ctf.tensor((I,J,r))
+        M3.i("iju") << U.i("iu")*V.i("ju")
     
-    for k in range(K):
-        num_nonzero, dense_omega = getDenseOmega(T,U,V,W,regParam,omega,I,J,K,r,k,"k")
-        Z = ctf.tensor((num_nonzero,r))
-        Z.i("tr") << dense_omega.i("ijt")*M3.i("ijr")
+        for k in range(K):
+            num_nonzero, dense_omega = getDenseOmega(T,U,V,W,regParam,omega,I,J,K,r,k,"k")
+            Z = ctf.tensor((num_nonzero,r))
+            Z.i("tr") << dense_omega.i("ijt")*M3.i("ijr")
         
-        Tbar = ctf.tensor((num_nonzero))
-        Tbar.i("t") << dense_omega.i("ijt") *T[:,:,k].i("ij")
+            Tbar = ctf.tensor((num_nonzero))
+            Tbar.i("t") << dense_omega.i("ijt") *T[:,:,k].i("ij")
         
-        W[k,:].set_zero()
-        W[k,:] = LS_SVD(Z,W[k,:],r,Tbar,regParam,k)
+            W[k,:].set_zero()
+            W[k,:] = LS_SVD(Z,W[k,:],r,Tbar,regParam,k)
        
-    #W *= normalize(W,r)
-    
-    return W
+        #W *= normalize(W,r)
+        return W
+
 
 
 def LS_CG(Ax0,b,Z,x0,r,regParam):
@@ -269,101 +248,68 @@ def CG(Z,Tbar,r,regParam):
     return LS_CG(Ax0,b,Z,x0,r,regParam)
 
 
-def updateU_CG(T,U,V,W,regParam,omega,I,J,K,r):
-    
-    M1 = ctf.tensor((J,K,r))
-    M1.i("jku") << V.i("ju")*W.i("ku")
-    
-    for i in range(I):
-        #num_nonzero, dense_omega = getDenseOmega(T,U,V,W,regParam,omega,I,J,K,r,i,"i")
+def updateFactor_CG(T,U,V,W,regParam,omega,I,J,K,r,string):
 
-        #Z = ctf.tensor((num_nonzero,r))
-        #Z.i("tr") << dense_omega.i("jkt")*M1.i("jkr")
-        
-        #Tbar = ctf.tensor((num_nonzero))
-        #Tbar.i("t") << dense_omega.i("jkt") *T[i,:,:].i("jk")
-        
-        
-        #U[i,:].set_zero()
-        #U[i,:] = CG(Z,Tbar,r,regParam)
-        #U[i,:] = la.lstsq(ctf.to_nparray(Z), ctf.to_nparray(Tbar))[0]
+    if (string == "U"):
+        M1 = ctf.tensor((J,K,r))
+        M1.i("jku") << V.i("ju")*W.i("ku")
+    
+        for i in range(I):
+            num_nonzero, dense_omega = getDenseOmega(T,U,V,W,regParam,omega,I,J,K,r,i,"i")
 
+            Z = ctf.tensor((num_nonzero,r))
+            Z.i("tr") << dense_omega.i("jkt")*M1.i("jkr")
         
-        Z = M1.reshape((J*K,r))
-        Tbar = T[i,:,:].reshape((J*K))
-       
-        U[i,:].set_zero()
-        U[i,:] = CG(Z,Tbar,r,regParam)
-    #print(U)
-    #print(normalize(U,r))
-    #U *= normalize(U,r)
-     
-    return U
-    
-    
-def updateV_CG(T,U,V,W,regParam,omega,I,J,K,r):
-    '''Update V matrix by using the formula'''
-    
-    M2 = ctf.tensor((I,K,r))
-    M2.i("iku") << U.i("iu")*W.i("ku")
-    
-    for j in range(J):
-        num_nonzero, dense_omega = getDenseOmega(T,U,V,W,regParam,omega,I,J,K,r,j,"j")
-        Z = ctf.tensor((num_nonzero,r))
-        Z.i("tr") << dense_omega.i("ikt")*M2.i("ikr")
+            Tbar = ctf.tensor((num_nonzero))
+            Tbar.i("t") << dense_omega.i("jkt") *T[i,:,:].i("jk")
         
-        Tbar = ctf.tensor((num_nonzero))
-        Tbar.i("t") << dense_omega.i("ikt") *T[:,j,:].i("ik")
         
-        V[j,:].set_zero()
-        V[j,:] = CG(Z,Tbar,r,regParam)
-        #V[j,:] = la.lstsq(ctf.to_nparray(Z), ctf.to_nparray(Tbar))[0]
+            U[i,:].set_zero()
+            U[i,:] = CG(Z,Tbar,r,regParam)
+            #U[i,:] = la.lstsq(ctf.to_nparray(Z), ctf.to_nparray(Tbar))[0]
 
-        # Z = M2.reshape((I*K,r))
-        # Tbar = T[:,j,:].reshape((I*K))
-        # V[j,:].set_zero()
-        # V[j,:] = CG(Z,Tbar,r)
+        return U
 
-
-    #V *= normalize(V,r)
+    if (string == "V"):
+        M2 = ctf.tensor((I,K,r))
+        M2.i("iku") << U.i("iu")*W.i("ku")
     
-    return V  
-
-def updateW_CG(T,U,V,W,regParam,omega,I,J,K,r):
-    '''Update V matrix by using the formula'''
-    
-    M3 = ctf.tensor((I,J,r))
-    M3.i("iju") << U.i("iu")*V.i("ju")
-    
-    for k in range(K):
-        num_nonzero, dense_omega = getDenseOmega(T,U,V,W,regParam,omega,I,J,K,r,k,"k")
-        Z = ctf.tensor((num_nonzero,r))
-        Z.i("tr") << dense_omega.i("ijt")*M3.i("ijr")
+        for j in range(J):
+            num_nonzero, dense_omega = getDenseOmega(T,U,V,W,regParam,omega,I,J,K,r,j,"j")
+            Z = ctf.tensor((num_nonzero,r))
+            Z.i("tr") << dense_omega.i("ikt")*M2.i("ikr")
         
-        Tbar = ctf.tensor((num_nonzero))
-        Tbar.i("t") << dense_omega.i("ijt") *T[:,:,k].i("ij")
+            Tbar = ctf.tensor((num_nonzero))
+            Tbar.i("t") << dense_omega.i("ikt") *T[:,j,:].i("ik")
+        
+            V[j,:].set_zero()
+            V[j,:] = CG(Z,Tbar,r,regParam)
+            #V[j,:] = la.lstsq(ctf.to_nparray(Z), ctf.to_nparray(Tbar))[0]
+    
+        return V
+
+    if (string == "W"):
+        M3 = ctf.tensor((I,J,r))
+        M3.i("iju") << U.i("iu")*V.i("ju")
+    
+        for k in range(K):
+            num_nonzero, dense_omega = getDenseOmega(T,U,V,W,regParam,omega,I,J,K,r,k,"k")
+            Z = ctf.tensor((num_nonzero,r))
+            Z.i("tr") << dense_omega.i("ijt")*M3.i("ijr")
+        
+            Tbar = ctf.tensor((num_nonzero))
+            Tbar.i("t") << dense_omega.i("ijt") *T[:,:,k].i("ij")
    
-        W[k,:].set_zero()
-        W[k,:] = CG(Z,Tbar,r,regParam)
-        #W[k,:] = la.lstsq(ctf.to_nparray(Z), ctf.to_nparray(Tbar))[0]
+            W[k,:].set_zero()
+            W[k,:] = CG(Z,Tbar,r,regParam)
+            #W[k,:] = la.lstsq(ctf.to_nparray(Z), ctf.to_nparray(Tbar))[0]
 
-        # Z = M3.reshape((J*K,r))
-        # Tbar = T[:,:,k].reshape((J*K))
-        # W[k,:].set_zero()
-        # W[k,:] = CG(Z,Tbar,r)
-    #print(W,normalize(W,r))
-    #W *= normalize(W,r)
-    
-    return W
+        return W
 
 
-# In[18]:
 
+def getALS_SVD(T,U,V,W,regParam,omega,I,J,K,r):
 
-def getALSctf(T,U,V,W,regParam,omega,I,J,K,r):
-    '''
-    Same thing as above, but CTF
-    '''
     it = 0
     E = ctf.tensor((I,J,K))
     E.i("ijk") << T.i("ijk") - omega.i("ijk")*U.i("iu")*V.i("ju")*W.i("ku")
@@ -371,13 +317,9 @@ def getALSctf(T,U,V,W,regParam,omega,I,J,K,r):
     
     while True:
         
-        #U = updateU_SVD(T,U,V,W,regParam,omega,I,J,K,r)
-        #V = updateV_SVD(T,U,V,W,regParam,omega,I,J,K,r) 
-        #W = updateW_SVD(T,U,V,W,regParam,omega,I,J,K,r)
-        
-        U = updateU_CG(T,U,V,W,regParam,omega,I,J,K,r)
-        V = updateV_CG(T,U,V,W,regParam,omega,I,J,K,r) 
-        W = updateW_CG(T,U,V,W,regParam,omega,I,J,K,r)
+        U = updateFactor_SVD(T,U,V,W,regParam,omega,I,J,K,r,"U")
+        V = updateFactor_SVD(T,U,V,W,regParam,omega,I,J,K,r,"V") 
+        W = updateFactor_SVD(T,U,V,W,regParam,omega,I,J,K,r,"W")
         
         E.set_zero()
         E.i("ijk") << T.i("ijk") - omega.i("ijk")*U.i("iu")*V.i("ju")*W.i("ku")
@@ -395,7 +337,36 @@ def getALSctf(T,U,V,W,regParam,omega,I,J,K,r):
     return U,V,W
 
 
-# In[19]:
+def getALS_CG(T,U,V,W,regParam,omega,I,J,K,r):
+    '''
+    Same thing as above, but CTF
+    '''
+    it = 0
+    E = ctf.tensor((I,J,K))
+    E.i("ijk") << T.i("ijk") - omega.i("ijk")*U.i("iu")*V.i("ju")*W.i("ku")
+    curr_err_norm = ctf.vecnorm(E) + (ctf.vecnorm(U) + ctf.vecnorm(V) + ctf.vecnorm(W))*regParam
+    
+    while True:
+
+        U = updateFactor_CG(T,U,V,W,regParam,omega,I,J,K,r,"U")
+        V = updateFactor_CG(T,U,V,W,regParam,omega,I,J,K,r,"V") 
+        W = updateFactor_CG(T,U,V,W,regParam,omega,I,J,K,r,"W")
+        
+        E.set_zero()
+        E.i("ijk") << T.i("ijk") - omega.i("ijk")*U.i("iu")*V.i("ju")*W.i("ku")
+        next_err_norm = ctf.vecnorm(E) + (ctf.vecnorm(U) + ctf.vecnorm(V) + ctf.vecnorm(W))*regParam
+            
+        print(curr_err_norm, next_err_norm)
+        
+        if abs(curr_err_norm - next_err_norm) < .001 or it > 20:
+            break
+        #print(next_err_norm/curr_err_norm)
+        curr_err_norm = next_err_norm
+        it += 1
+    
+    print("Number of iterations: ", it)
+    return U,V,W
+
 
 
 def main():
@@ -414,31 +385,29 @@ def main():
     regParam = 0.1
         
     ctf.random.seed(42)
-    U = ctf.random.random((I,r))
-    V= ctf.random.random((J,r))
-    W= ctf.random.random((K,r))
+    U_SVD = ctf.random.random((I,r))
+    V_SVD= ctf.random.random((J,r))
+    W_SVD= ctf.random.random((K,r))
     
     # 3rd-order tensor
-    T = ctf.tensor((I,J,K),sp=True)
-    T.fill_sp_random(0,1,sparsity)
+    T_SVD = ctf.tensor((I,J,K),sp=True)
+    T_SVD.fill_sp_random(0,1,sparsity)
  
-    #T.i("ijk") << T1.i("ijk")
-    #print(T.sp)
-    #print(T)
-    omega = updateOmega(T,I,J,K)
-    
-    U = ctf.random.random((I,r))
-    V= ctf.random.random((J,r))
-    W= ctf.random.random((K,r))
-    
-    t = time.time()
-    
-    getALSctf(T,U,V,W,regParam,omega,I,J,K,r)
-    
-    print("ALS costs time = ",np.round_(time.time()- t,4))    
+    omega = updateOmega(T_SVD,I,J,K)
+
+    U_CG = ctf.copy(U_SVD)
+    V_CG = ctf.copy(V_SVD)
+    W_CG = ctf.copy(W_SVD)
+    T_CG = ctf.copy(T_SVD)
+        
+    t = time.time()  
+    getALS_SVD(T_SVD,U_SVD,V_SVD,W_SVD,regParam,omega,I,J,K,r)   
+    print("ALS SVD costs time = ",np.round_(time.time()- t,4))    
 
 
-# In[20]:
+    t = time.time()  
+    getALS_CG(T_CG,U_CG,V_CG,W_CG,regParam,omega,I,J,K,r)   
+    print("ALS CG costs time = ",np.round_(time.time()- t,4))    
 
 
 main()
