@@ -90,63 +90,29 @@ def updateOmega(T,I,J,K):
     return omegactf
 
 
-def getDenseOmega(T,U,V,W,regParam,omega,I,J,K,r,idx,string):
-    if (string =="i"):
-        omega_curr = ctf.to_nparray(omega[idx,:,:].reshape(J*K))
-        omega_sum = np.cumsum(omega_curr).tolist()
-        omega_sum.insert(0,0)
-        del omega_sum[-1]
-        #print("omega prefix sum: ", omega_sum)
-        l = []
-        for x,y in enumerate(omega_sum):
-            if omega_curr[x] != 0:
-                l.append((x,int(y)))
-        #print(l)
-        num_nonzero = len(l)
+def getDenseOmega(T,U,V,W,regParam,omega,I,J,K,r):
+    omega_curr = ctf.to_nparray(omega.reshape(I*J*K))
+    omega_sum = np.cumsum(omega_curr).tolist()
+    omega_sum.insert(0,0)
+    del omega_sum[-1]
+    #print("omega prefix sum: ", omega_sum)
+    l = []
+    for x,y in enumerate(omega_sum):
+        if omega_curr[x] != 0:
+            l.append((x,int(y)))
+    #print(l)
+    num_nonzero = len(l)
         
-        # form dense omega matrix
-        temp = np.zeros((J*K,len(l)))
-        for x,y in l:
-            temp[x][y] = 1
-        #print("omega_dense: ", omega_dense)
+    # form dense omega matrix
+    temp = np.zeros((I*J*K,len(l)))
+    for x,y in l:
+        temp[x][y] = 1
+    #print("omega_dense: ", omega_dense)
        
-        omega_dense = ctf.astensor(temp)
-        #print("before", (omega_dense, omega_dense.shape))
-        omega_dense = omega_dense.reshape(J,K,num_nonzero)
-        #print("after", (omega_dense, omega_dense.shape))
-        
-    
-    if (string =="j"):
-        omega_curr = ctf.to_nparray(omega[:,idx,:].reshape(I*K))
-        omega_sum = np.cumsum(omega_curr).tolist()
-        omega_sum.insert(0,0)
-        del omega_sum[-1]
-        l = []
-        for x,y in enumerate(omega_sum):
-            if omega_curr[x] != 0:
-                l.append((x,int(y)))
-        num_nonzero = len(l)
-        temp = np.zeros((I*K,len(l)))
-        for x,y in l:
-            temp[x,y] = 1
-        omega_dense = ctf.astensor(temp)
-        omega_dense = omega_dense.reshape(I,K,num_nonzero)        
-    
-    if (string =="k"):
-        omega_curr = ctf.to_nparray(omega[:,:,idx].reshape(I*J))
-        omega_sum = np.cumsum(omega_curr).tolist()
-        omega_sum.insert(0,0)
-        del omega_sum[-1]
-        l = []
-        for x,y in enumerate(omega_sum):
-            if omega_curr[x] != 0:
-                l.append((x,int(y)))
-        num_nonzero = len(l)  
-        temp = np.zeros((I*J,len(l)))
-        for x,y in l:
-            temp[x][y] = 1
-        omega_dense = ctf.astensor(temp)
-        omega_dense = omega_dense.reshape(I,J,num_nonzero)
+    omega_dense = ctf.astensor(temp)
+    #print("before", (omega_dense, omega_dense.shape))
+    omega_dense = omega_dense.reshape(I,J,K,num_nonzero)
+    #print("after", (omega_dense, omega_dense.shape))
         
     return num_nonzero,omega_dense
 
@@ -242,7 +208,7 @@ def LS_CG(Ax0,b,Z,x0,r,regParam):
     xk = x0
     for i in range(sk.shape[0]): # how many iterations?
         Ask = ctf.tensor(r)
-        Ask.i("i") << Z.i("ti") * Z.i("tj") * sk.i("j")  # A @ sk
+        Ask.i("i") << Z.i("tri") * Z.i("trj") * sk.i("j")  # A @ sk
         Ask += regParam*sk
         rnorm = ctf.dot(rk,rk)
         #print("rnorm",rnorm.to_nparray())
@@ -262,15 +228,19 @@ def LS_CG(Ax0,b,Z,x0,r,regParam):
 
 def CG(Z,Tbar,r,regParam):
     x0 = ctf.random.random(r)
-    Ax0 = ctf.tensor((r))
-Z.i("tj") <<
-        Z.i("tl") << 
-    Ax0.i("j") << Z.i("tj") * Z.i("tl") * x0.i("l")  # LHS; ATA using matrix-vector multiplication
+    Ax0 = ctf.tensor(r)
+    Ax0.i("j") << Z.i("trj") * Z.i("trl") * x0.i("l")  # LHS; ATA using matrix-vector multiplication
 
-    omega.i{"sik") << dense_omega.i("ikts")*dense_omega.i("ikts")
-    Ax0.i("sj") << m2.i("ikj") *omega.i("sik")*m2.i("ikl") * x0.i("sl")  # LHS; ATA using matrix-vector multiplication
+    #print("Z:", Z[0])
+    #print("Tbar:",Tbar)
+    #print("Ax0:", Ax0)
+
+    #omega.i("sik") << dense_omega.i("ikts")*dense_omega.i("ikts")
+    #Ax0.i("sj") << m2.i("ikj") *omega.i("sik")*m2.i("ikl") * x0.i("sl")  # LHS; ATA using matrix-vector multiplication
     Ax0 += regParam*x0
-    b = ctf.dot(Z.transpose(),Tbar)                  # RHS; ATb
+    #b = ctf.dot(Z.transpose(),Tbar)                  # RHS; ATb
+    b = ctf.tensor(r)
+    b.i("r") << Z.i("itr") * Tbar.i("it")
     return LS_CG(Ax0,b,Z,x0,r,regParam)
 
 
@@ -279,31 +249,30 @@ def updateU_CG(T,U,V,W,regParam,omega,I,J,K,r):
     M1 = ctf.tensor((J,K,r))
     M1.i("jku") << V.i("ju")*W.i("ku")
     
-    for i in range(I):
-        #num_nonzero, dense_omega = getDenseOmega(T,U,V,W,regParam,omega,I,J,K,r,i,"i")
+    num_nonzero, dense_omega = getDenseOmega(T,U,V,W,regParam,omega,I,J,K,r)
+    Z = ctf.tensor((I,num_nonzero,r))
+    Z.i("itr") << dense_omega.i("ijkt")*M1.i("jkr")
+        
+    Tbar = ctf.tensor((I,num_nonzero))
+    Tbar.i("it") << dense_omega.i("ijkt") *T.i("ijk")
+        
+        
+    U.set_zero()
+    U = CG(Z,Tbar,r,regParam)
+    #U = la.lstsq(ctf.to_nparray(Z), ctf.to_nparray(Tbar))[0]
 
-        #Z = ctf.tensor((num_nonzero,r))
-        #Z.i("tr") << dense_omega.i("jkt")*M1.i("jkr")
         
-        #Tbar = ctf.tensor((num_nonzero))
-        #Tbar.i("t") << dense_omega.i("jkt") *T[i,:,:].i("jk")
-        
-        
+        #Z = M1.reshape((J*K,r))
+        #Tbar = T[i,:,:].reshape((J*K))
         #U[i,:].set_zero()
         #U[i,:] = CG(Z,Tbar,r,regParam)
-        #U[i,:] = la.lstsq(ctf.to_nparray(Z), ctf.to_nparray(Tbar))[0]
 
-        
-        Z = M1.reshape((J*K,r))
-        Tbar = T[i,:,:].reshape((J*K))
-       
-        U[i,:].set_zero()
-        U[i,:] = CG(Z,Tbar,r,regParam)
     #print(U)
     #print(normalize(U,r))
     #U *= normalize(U,r)
      
     return U
+
     
     
 def updateV_CG(T,U,V,W,regParam,omega,I,J,K,r):
@@ -312,22 +281,22 @@ def updateV_CG(T,U,V,W,regParam,omega,I,J,K,r):
     M2 = ctf.tensor((I,K,r))
     M2.i("iku") << U.i("iu")*W.i("ku")
     
-    for j in range(J):
-        num_nonzero, dense_omega = getDenseOmega(T,U,V,W,regParam,omega,I,J,K,r,j,"j")
-        Z = ctf.tensor((num_nonzero,r))
-        Z.i("tr") << dense_omega.i("iktj")*m2.i("ikr")
+    #for j in range(J):
+    num_nonzero, dense_omega = getDenseOmega(T,U,V,W,regParam,omega,I,J,K,r)
+    Z = ctf.tensor((J,num_nonzero,r))
+    Z.i("jtr") << dense_omega.i("ijkt")*M2.i("ikr")
         
-        Tbar = ctf.tensor((num_nonzero))
-        Tbar.i("tj") << dense_omega.i("iktj") *T.i("ik")
+    Tbar = ctf.tensor((J,num_nonzero))
+    Tbar.i("jt") << dense_omega.i("ijkt") *T.i("ijk")
         
-        V.set_zero()
-        V = CG(Z,Tbar,r,regParam)
-        #V[j,:] = la.lstsq(ctf.to_nparray(Z), ctf.to_nparray(Tbar))[0]
+    V.set_zero()
+    V = CG(Z,Tbar,r,regParam)
+    #V[j,:] = la.lstsq(ctf.to_nparray(Z), ctf.to_nparray(Tbar))[0]
 
-        # Z = M2.reshape((I*K,r))
-        # Tbar = T[:,j,:].reshape((I*K))
-        # V[j,:].set_zero()
-        # V[j,:] = CG(Z,Tbar,r)
+    # Z = M2.reshape((I*K,r))
+    # Tbar = T[:,j,:].reshape((I*K))
+    # V[j,:].set_zero()
+    # V[j,:] = CG(Z,Tbar,r)
 
 
     #V *= normalize(V,r)
@@ -339,23 +308,23 @@ def updateW_CG(T,U,V,W,regParam,omega,I,J,K,r):
     
     M3 = ctf.tensor((I,J,r))
     M3.i("iju") << U.i("iu")*V.i("ju")
-    
-    for k in range(K):
-        num_nonzero, dense_omega = getDenseOmega(T,U,V,W,regParam,omega,I,J,K,r,k,"k")
-        Z = ctf.tensor((num_nonzero,r))
-        Z.i("tr") << dense_omega.i("ijt")*M3.i("ijr")
-        
-        Tbar = ctf.tensor((num_nonzero))
-        Tbar.i("t") << dense_omega.i("ijt") *T[:,:,k].i("ij")
-   
-        W[k,:].set_zero()
-        W[k,:] = CG(Z,Tbar,r,regParam)
-        #W[k,:] = la.lstsq(ctf.to_nparray(Z), ctf.to_nparray(Tbar))[0]
 
-        # Z = M3.reshape((J*K,r))
-        # Tbar = T[:,:,k].reshape((J*K))
-        # W[k,:].set_zero()
-        # W[k,:] = CG(Z,Tbar,r)
+    num_nonzero, dense_omega = getDenseOmega(T,U,V,W,regParam,omega,I,J,K,r)
+    Z = ctf.tensor((K,num_nonzero,r))
+    Z.i("ktr") << dense_omega.i("ijkt")*M3.i("ijr")
+        
+    Tbar = ctf.tensor((K,num_nonzero))
+    Tbar.i("kt") << dense_omega.i("ijkt") *T.i("ijk")
+   
+    W.set_zero()
+    W = CG(Z,Tbar,r,regParam)
+    
+    #W[k,:] = la.lstsq(ctf.to_nparray(Z), ctf.to_nparray(Tbar))[0]
+
+    # Z = M3.reshape((J*K,r))
+    # Tbar = T[:,:,k].reshape((J*K))
+    # W[k,:].set_zero()
+    # W[k,:] = CG(Z,Tbar,r)
     #print(W,normalize(W,r))
     #W *= normalize(W,r)
     
@@ -373,6 +342,7 @@ def getALSctf(T,U,V,W,regParam,omega,I,J,K,r):
     E = ctf.tensor((I,J,K))
     E.i("ijk") << T.i("ijk") - omega.i("ijk")*U.i("iu")*V.i("ju")*W.i("ku")
     curr_err_norm = ctf.vecnorm(E) + (ctf.vecnorm(U) + ctf.vecnorm(V) + ctf.vecnorm(W))*regParam
+    print(U)
     
     while True:
         
@@ -431,10 +401,6 @@ def main():
     #print(T.sp)
     #print(T)
     omega = updateOmega(T,I,J,K)
-    
-    U = ctf.random.random((I,r))
-    V= ctf.random.random((J,r))
-    W= ctf.random.random((K,r))
     
     t = time.time()
     
