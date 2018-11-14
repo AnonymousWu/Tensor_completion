@@ -207,17 +207,15 @@ def updateW_SVD(T,U,V,W,regParam,omega,I,J,K,r):
     return W
 
 
-def LS_CG(Ax0,b,Z,x0,r,regParam):
+def LS_CG(Ax0,b,x0,r,regParam,M,omega,I):
     rk = b - Ax0
-    print(rk.shape)
     sk = rk
     xk = x0
     for i in range(sk.shape[0]): # how many iterations?
-        Ask = ctf.tensor(r)
-        Ask.i("i") << Z.i("tri") * Z.i("trj") * sk.i("j")  # A @ sk
-        #Ask.i("i") << 
+        Ask = ctf.tensor((I,r))
+        Ask.i("ir") << M.i("JKr")*omega.i("iJK")*M.i("JKR")*sk.i("iR")
 
-        #Ask += regParam*sk     
+        Ask += regParam*sk    
         rnorm = ctf.dot(rk,rk)
         #print("rnorm",rnorm.to_nparray())
         if rnorm.to_nparray() < 1.e-16:
@@ -235,29 +233,25 @@ def LS_CG(Ax0,b,Z,x0,r,regParam):
     return xk
 
 
-def CG(T,r,regParam,omega,M,Z,I,dense_omega):
+#def CG(T,r,regParam,omega,M,I,dense_omega):
+def CG(T,M,I,r,regParam,omega):
+    
+    #temp_omega = ctf.tensor((6,6,6))
+    #temp_omega.i("ijk") << dense_omega.i("jkti")*dense_omega.i("jkti")
+    #print(ctf.all(temp_omega==omega))  
+
     x0 = ctf.random.random((I,r))
     Ax0 = ctf.tensor((I,r))
-    #Ax0.i("i") << Z.i("ti") * Z.i("tj") * x0.i("j")
-    Ax0.i("rj") << Z.i("trj") * Z.i("tli") * x0.i("il")  # LHS; ATA using matrix-vector multiplication
-
-    #temp_omega = ctf.tensor((6,6,6))
-    #temp_omega.i("ijk") << dense_omega.i("ijkt")*dense_omega.i("ijkt")
-    #print(temp_omega==omega)   The same!
-
-    #print(Ax0.shape,M.shape,omega.shape,M.shape,x0.shape)
-    #Ax0.i("sj") << M.i("ikj")*omega.i("sik")*M.i("ikl") * x0.i("il")  # LHS; ATA using matrix-vector multiplication
-    Ax0 += regParam*x0  
+    #Ax0.i("ir") << M.i("jkr")*dense_omega.i("jkti")*dense_omega.i("jktI")*M.i("jkR")*x0.i("IR")
+    Ax0.i("ir") << M.i("JKr")*omega.i("iJK")*M.i("JKR") * x0.i("iR")  # LHS; ATA using matrix-vector multiplication
+    Ax0 += regParam*x0 
+    print("Ax0: ",Ax0)
 
     b = ctf.tensor((I,r))
-    nb = ctf.tensor((I,r))
-    nb.i("ir") << M.i("jkr") * dense_omega.i("ijkt") * dense_omega.i("IJKt") * T.i("IJK")
-    #print(b.shape,M.shape,omega.shape,T.shape)
-    b.i("ir") <<  M.i("jkr")*omega.i("ijk") * T.i("ijk")  # RHS; ATb
-    print("nb: ",nb)
+    #b.i("ir") << M.i("JKr") * dense_omega.i("JKti") * dense_omega.i("JKtI") * T.i("IJK")
+    b.i("ir") << M.i("JKr") * T.i("iJK")  # RHS; ATb
     print("b: ",b)
-    #print(Ax0, b)
-    return LS_CG(Ax0,b,Z,x0,r,regParam)
+    return LS_CG(Ax0,b,x0,r,regParam,M,omega,I)
 
 
 def CG_dense(Z,Tbar,r,regParam):
@@ -282,8 +276,8 @@ def updateU_CG(T,U,V,W,regParam,omega,I,J,K,r):
     
     num_nonzero, dense_omega = getDenseOmega(T,U,V,W,regParam,omega,I,J,K,r,"i")
 
-    Z = ctf.tensor((J*K,r,I))
-    Z.i("tri") << dense_omega.i("jkti")*M1.i("jkr")
+    Z = ctf.tensor((I,J*K,r))
+    Z.i("itr") << dense_omega.i("jkti")*M1.i("jkr")
         
     #Tbar = ctf.tensor((I,num_nonzero))
     #Tbar.i("it") << dense_omega.i("ijkt") *T.i("ijk")
@@ -293,7 +287,7 @@ def updateU_CG(T,U,V,W,regParam,omega,I,J,K,r):
     #U = CG(Z,Tbar,r,regParam,dense_omega,omega,M1,T)
 
     U.set_zero()
-    U = CG(T,r,regParam,omega,M1,Z,I,dense_omega)
+    U = CG(T,M1,I,r,regParam,omega)
      
     return U
 
