@@ -90,31 +90,36 @@ def updateOmega(T,I,J,K):
     return omegactf
 
 
-def getDenseOmega(T,U,V,W,regParam,omega,I,J,K,r):
-    omega_curr = ctf.to_nparray(omega.reshape(I*J*K))
-    omega_sum = np.cumsum(omega_curr).tolist()
-    omega_sum.insert(0,0)
-    del omega_sum[-1]
-    #print("omega prefix sum: ", omega_sum)
-    l = []
-    for x,y in enumerate(omega_sum):
-        if omega_curr[x] != 0:
-            l.append((x,int(y)))
-    #print(l)
-    num_nonzero = len(l)
+def getDenseOmega(T,U,V,W,regParam,omega,I,J,K,r,string):
+    if (string =="i"):
+        omega_dense = []
+        for idx in range(I):
+            omega_curr = ctf.to_nparray(omega[idx,:,:].reshape(J*K))
+            omega_sum = np.cumsum(omega_curr).tolist()
+            omega_sum.insert(0,0)
+            del omega_sum[-1]
+            #print("omega prefix sum: ", omega_sum)
+            l = []
+            for x,y in enumerate(omega_sum):
+                if omega_curr[x] != 0:
+                    l.append((x,int(y)))
+            #print(l)
+            num_nonzero = len(l)
         
-    # form dense omega matrix
-    temp = np.zeros((I*J*K,len(l)))
-    for x,y in l:
-        temp[x][y] = 1
-    #print("omega_dense: ", omega_dense)
-       
-    omega_dense = ctf.astensor(temp)
-    #print("before", (omega_dense, omega_dense.shape))
-    omega_dense = omega_dense.reshape(I,J,K,num_nonzero)
-    #print("after", (omega_dense, omega_dense.shape))
-        
-    return num_nonzero,omega_dense
+            # form dense omega matrix
+            #temp = np.zeros((J*K,len(l)))
+            temp = np.zeros((J*K,J*K))
+            for x,y in l:
+                temp[x][y] = 1
+            #print("omega_dense: ", omega_dense)
+            temp = np.reshape(temp,(J,K,J*K))
+            omega_dense.append(temp)
+        omega_dense = ctf.astensor(np.stack(omega_dense,axis=3))
+        #print("before", (omega_dense[...,0], omega_dense.shape))
+        print("omega_dense shape: ", omega_dense.shape)
+        #print("after", (omega_dense, omega_dense.shape))  
+
+        return num_nonzero,omega_dense   
 
 
 # In[9]:
@@ -204,6 +209,7 @@ def updateW_SVD(T,U,V,W,regParam,omega,I,J,K,r):
 
 def LS_CG(Ax0,b,Z,x0,r,regParam):
     rk = b - Ax0
+    print(rk.shape)
     sk = rk
     xk = x0
     for i in range(sk.shape[0]): # how many iterations?
@@ -229,29 +235,28 @@ def LS_CG(Ax0,b,Z,x0,r,regParam):
     return xk
 
 
-def CG(T,r,regParam,omega,M,Z):
-    x0 = ctf.random.random(r)
-    Ax0 = ctf.tensor((6,r))
-    #Ax0.i("j") << Z.i("trj") * Z.i("trl") * x0.i("l")  # LHS; ATA using matrix-vector multiplication
-
-    #print("Z:", Z[0])
-    #print("Tbar:",Tbar)
-    #print("Ax0:", Ax0)
+def CG(T,r,regParam,omega,M,Z,I,dense_omega):
+    x0 = ctf.random.random((I,r))
+    Ax0 = ctf.tensor((I,r))
+    #Ax0.i("i") << Z.i("ti") * Z.i("tj") * x0.i("j")
+    Ax0.i("rj") << Z.i("trj") * Z.i("tli") * x0.i("il")  # LHS; ATA using matrix-vector multiplication
 
     #temp_omega = ctf.tensor((6,6,6))
     #temp_omega.i("ijk") << dense_omega.i("ijkt")*dense_omega.i("ijkt")
     #print(temp_omega==omega)   The same!
 
-    Ax0.i("sj") << M.i("ikj")*omega.i("sik")*M.i("ikl") * x0.i("l")  # LHS; ATA using matrix-vector multiplication
     #print(Ax0.shape,M.shape,omega.shape,M.shape,x0.shape)
-  
+    #Ax0.i("sj") << M.i("ikj")*omega.i("sik")*M.i("ikl") * x0.i("il")  # LHS; ATA using matrix-vector multiplication
+    Ax0 += regParam*x0  
 
-    #Ax0 += regParam*x0    # TODO
-    
-
-    b = ctf.tensor((6,r))
-    b.i("su") <<  M.i("iju")*omega.i("sij")*T.i("ijk")     # RHS; ATb
-    print(b)
+    b = ctf.tensor((I,r))
+    nb = ctf.tensor((I,r))
+    nb.i("ir") << M.i("jkr") * dense_omega.i("ijkt") * dense_omega.i("IJKt") * T.i("IJK")
+    #print(b.shape,M.shape,omega.shape,T.shape)
+    b.i("ir") <<  M.i("jkr")*omega.i("ijk") * T.i("ijk")  # RHS; ATb
+    print("nb: ",nb)
+    print("b: ",b)
+    #print(Ax0, b)
     return LS_CG(Ax0,b,Z,x0,r,regParam)
 
 
@@ -275,9 +280,10 @@ def updateU_CG(T,U,V,W,regParam,omega,I,J,K,r):
     M1 = ctf.tensor((J,K,r))
     M1.i("jku") << V.i("ju")*W.i("ku")
     
-    num_nonzero, dense_omega = getDenseOmega(T,U,V,W,regParam,omega,I,J,K,r)
-    Z = ctf.tensor((I,num_nonzero,r))
-    Z.i("itr") << dense_omega.i("ijkt")*M1.i("jkr")
+    num_nonzero, dense_omega = getDenseOmega(T,U,V,W,regParam,omega,I,J,K,r,"i")
+
+    Z = ctf.tensor((J*K,r,I))
+    Z.i("tri") << dense_omega.i("jkti")*M1.i("jkr")
         
     #Tbar = ctf.tensor((I,num_nonzero))
     #Tbar.i("it") << dense_omega.i("ijkt") *T.i("ijk")
@@ -287,7 +293,7 @@ def updateU_CG(T,U,V,W,regParam,omega,I,J,K,r):
     #U = CG(Z,Tbar,r,regParam,dense_omega,omega,M1,T)
 
     U.set_zero()
-    U = CG(T,r,regParam,omega,M1,Z)
+    U = CG(T,r,regParam,omega,M1,Z,I,dense_omega)
      
     return U
 
@@ -310,7 +316,7 @@ def updateV_CG(T,U,V,W,regParam,omega,I,J,K,r):
     #V = CG(Z,Tbar,r,regParam,dense_omega,omega,M2,T)
 
     V.set_zero()
-    V = CG(T,r,regParam,omega,M2,Z)
+    V = CG(T,r,regParam,omega,M2,Z,J)
     
     return V  
 
@@ -331,7 +337,7 @@ def updateW_CG(T,U,V,W,regParam,omega,I,J,K,r):
     #W = CG(Z,Tbar,r,regParam,dense_omega,omega,M3,T)
 
     W.set_zero()
-    W = CG(T,r,regParam,omega,M3,Z)
+    W = CG(T,r,regParam,omega,M3,Z,K)
     
     return W
 
