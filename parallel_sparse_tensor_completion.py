@@ -180,7 +180,7 @@ def getDenseOmega_all(T,U,V,W,regParam,omega,I,J,K,r,string):
 # In[9]:
 
 
-def LS_SVD(Z,factor,r,Tbar,regParam,idx):
+def LS_SVD(Z,factor,r,Tbar,regParam):
     [U_,S_,VT_] = ctf.svd(Z)
     S_ = S_/(S_*S_ + regParam*ctf.ones(S_.shape))
     #print(Tbar)
@@ -197,6 +197,8 @@ def updateFactor_SVD(T,U,V,W,regParam,omega,I,J,K,r,string):
 
     # updateU
     if (string=="U"):
+
+        print("before U", U)
         M1 = ctf.tensor((J,K,r))
         M1.i("jku") << V.i("ju")*W.i("ku")
     
@@ -211,7 +213,9 @@ def updateFactor_SVD(T,U,V,W,regParam,omega,I,J,K,r,string):
         
             #print("in",U[i])
             U[i,:].set_zero()
-            U[i,:] = LS_SVD(Z,U[i,:],r,Tbar,regParam,i)
+            U[i,:] = LS_SVD(Z,U[i,:],r,Tbar,regParam)
+
+        print("after U", U)
 
         return U
 
@@ -229,7 +233,7 @@ def updateFactor_SVD(T,U,V,W,regParam,omega,I,J,K,r,string):
             Tbar.i("t") << dense_omega.i("ikt") *T[:,j,:].i("ik")
         
             V[j,:].set_zero()
-            V[j,:] = LS_SVD(Z,V[j,:],r,Tbar,regParam,j)
+            V[j,:] = LS_SVD(Z,V[j,:],r,Tbar,regParam)
 
         return V
 
@@ -247,13 +251,13 @@ def updateFactor_SVD(T,U,V,W,regParam,omega,I,J,K,r,string):
             Tbar.i("t") << dense_omega.i("ijt") *T[:,:,k].i("ij")
         
             W[k,:].set_zero()
-            W[k,:] = LS_SVD(Z,W[k,:],r,Tbar,regParam,k)
+            W[k,:] = LS_SVD(Z,W[k,:],r,Tbar,regParam)
        
         #W *= normalize(W,r)
         return W
 
 
-def LS_CG(Ax0,b,x0,r,regParam,M,omega,I,string):
+def CG(Ax0,b,x0,r,regParam,M,omega,I,string):
     rk = b - Ax0
     sk = rk
     xk = x0
@@ -305,26 +309,6 @@ def LS_CG(Ax0,b,x0,r,regParam,M,omega,I,string):
     return xk
 
 
-#def CG(T,r,regParam,omega,M,I,dense_omega):
-def CG(T,M,I,r,regParam,omega):
-    
-    #temp_omega = ctf.tensor((6,6,6))
-    #temp_omega.i("ijk") << dense_omega.i("jkti")*dense_omega.i("jkti")
-    #print(ctf.all(temp_omega==omega))  
-
-    x0 = ctf.random.random((I,r))
-    Ax0 = ctf.tensor((I,r))
-    #Ax0.i("ir") << M.i("jkr")*dense_omega.i("jkti")*dense_omega.i("jktI")*M.i("jkR")*x0.i("IR")
-    Ax0.i("ir") << M.i("JKr")*omega.i("iJK")*M.i("JKR") * x0.i("iR")  # LHS; ATA using matrix-vector multiplication
-    Ax0 += regParam*x0 
-    print("Ax0: ",Ax0)
-
-    b = ctf.tensor((I,r))
-    #b.i("ir") << M.i("JKr") * dense_omega.i("JKti") * dense_omega.i("JKtI") * T.i("IJK")
-    b.i("ir") << M.i("JKr") * T.i("iJK")  # RHS; ATb
-    #print("b: ",b)
-    return LS_CG(Ax0,b,x0,r,regParam,M,omega,I)
-
 def updateFactor_CG(T,U,V,W,regParam,omega,I,J,K,r,string):
 
     if (string=="U"):
@@ -352,7 +336,7 @@ def updateFactor_CG(T,U,V,W,regParam,omega,I,J,K,r,string):
         #print("b: ",b)
         
         U.set_zero()
-        U = LS_CG(Ax0,b,x0,r,regParam,M1,omega,I,"U")
+        U = CG(Ax0,b,x0,r,regParam,M1,omega,I,"U")
      
         return U
 
@@ -380,7 +364,7 @@ def updateFactor_CG(T,U,V,W,regParam,omega,I,J,K,r,string):
         #print("b: ",b)
 
         V.set_zero()
-        V = LS_CG(Ax0,b,x0,r,regParam,M2,omega,J,"V")
+        V = CG(Ax0,b,x0,r,regParam,M2,omega,J,"V")
     
         return V  
 
@@ -408,7 +392,90 @@ def updateFactor_CG(T,U,V,W,regParam,omega,I,J,K,r,string):
         #print("b: ",b)
 
         W.set_zero()
-        W = LS_CG(Ax0,b,x0,r,regParam,M3,omega,K,"W")
+        W = CG(Ax0,b,x0,r,regParam,M3,omega,K,"W")
+    
+        return W
+
+
+def Kressner(A,b,factor,r,regParam):
+    [U_,S_,VT_] = ctf.svd(A)
+    S_ = S_/(S_*S_ + (regParam**2)*ctf.ones(S_.shape))
+    factor.set_zero()
+    factor.i("r") << VT_.i("kr")*S_.i("k")*U_.i("tk")*b.i("t")
+    #print( VT_.to_nparray().T.shape,S_.to_nparray().shape,U_.to_nparray().T.shape,Tbar.to_nparray().shape)
+    #factor = VT_.to_nparray().T@S_.to_nparray()@U_.to_nparray().T@Tbar.to_nparray()
+    #if Z.shape[0] == 1:
+    #    print("Here", factor,VT_,S_,U_,Tbar)
+    
+    return factor   
+
+
+def updateFactor_Kressner(T,U,V,W,regParam,omega,I,J,K,r,string):
+
+    if (string=="U"):
+        #M1 = ctf.tensor((J,K,r))
+        #M1.i("jku") << V.i("ju")*W.i("ku")
+
+        print("before U", U)
+
+        for i in range(I):
+            A = ctf.tensor((r,r))
+            #A.i("ir") << M1.i("JKr")*omega.i("iJK")*M1.i("JKR")  # LHS; ATA using matrix-vector multiplication
+            A.i("uv") << V.i("Ju")*W.i("Ku") * omega[i,:,:].i("JK")*V.i("Jv")*W.i("Kv")
+            #A += (regParam**2)*ctf.ones(A.shape)
+            #print("A: ",A)
+
+            b = ctf.tensor(r)
+            #b.i("ir") << M.i("JKr") * dense_omega.i("JKti") * dense_omega.i("JKtI") * T.i("IJK")
+            b.i("r") << V.i("Jr")*W.i("Kr") * T[i,:,:].i("JK")  # RHS; ATb
+            #print("b: ",b)
+        
+            U[i,:].set_zero()
+            U[i,:]= Kressner(A,b,U[i,:],r,regParam)
+
+        print("after U", U)
+     
+        return U
+
+    if (string=="V"):
+        #M2 = ctf.tensor((I,K,r))
+        #M2.i("iku") << U.i("iu")*W.i("ku")
+
+        for j in range(J):
+            A = ctf.tensor((r,r))
+            #A.i("jr") << M2.i("IKr")*omega.i("IjK")*M2.i("IKR") # LHS; ATA using matrix-vector multiplication
+            A.i("uv") << U.i("Iu")*W.i("Ku") * omega[:,j,:].i("IK") * U.i("Iv")*W.i("Kv")
+            #Ax0 += regParam*x0 
+            #print("Ax0: ",Ax0)
+
+            b = ctf.tensor(r)
+            #b.i("ir") << M.i("JKr") * dense_omega.i("JKti") * dense_omega.i("JKtI") * T.i("IJK")
+            b.i("r") <<  U.i("Ir")*W.i("Kr") * T[:,j,:].i("IK")  # RHS; ATb
+            #print("b: ",b)
+
+            V[j,:].set_zero()
+            V[j,:] = Kressner(A,b,V[j,:],r,regParam)
+    
+        return V  
+
+    if (string=="W"):
+        #M3 = ctf.tensor((I,J,r))
+        #M3.i("iju") << U.i("iu")*V.i("ju")
+
+
+        for k in range(K):
+            A= ctf.tensor((r,r))
+            A.i("uv") << U.i("Iu")*V.i("Ju")*omega[:,:,k].i("IJ")*U.i("Iv")*V.i("Jv")  # LHS; ATA using matrix-vector multiplication
+            #Ax0 += regParam*x0 
+            #print("Ax0: ",Ax0)
+
+            b = ctf.tensor(r)
+            #b.i("ir") << M.i("JKr") * dense_omega.i("JKti") * dense_omega.i("JKtI") * T.i("IJK")
+            b.i("r") << U.i("Ir")*V.i("Jr") * T[:,:,k].i("IJ")  # RHS; ATb
+            #print("b: ",b)
+
+            W[k,:].set_zero()
+            W[k,:] = Kressner(A,b,W[k,:],r,regParam)
     
         return W
 
@@ -474,6 +541,37 @@ def getALS_CG(T,U,V,W,regParam,omega,I,J,K,r):
     return U,V,W
 
 
+def getALS_Kressner(T,U,V,W,regParam,omega,I,J,K,r):
+    '''
+    Same thing as above, but CTF
+    '''
+    it = 0
+    E = ctf.tensor((I,J,K))
+    E.i("ijk") << T.i("ijk") - omega.i("ijk")*U.i("iu")*V.i("ju")*W.i("ku")
+    curr_err_norm = ctf.vecnorm(E) + (ctf.vecnorm(U) + ctf.vecnorm(V) + ctf.vecnorm(W))*regParam
+    
+    while True:
+
+        U = updateFactor_Kressner(T,U,V,W,regParam,omega,I,J,K,r,"U")
+        V = updateFactor_Kressner(T,U,V,W,regParam,omega,I,J,K,r,"V") 
+        W = updateFactor_Kressner(T,U,V,W,regParam,omega,I,J,K,r,"W")
+        
+        E.set_zero()
+        E.i("ijk") << T.i("ijk") - omega.i("ijk")*U.i("iu")*V.i("ju")*W.i("ku")
+        next_err_norm = ctf.vecnorm(E) + (ctf.vecnorm(U) + ctf.vecnorm(V) + ctf.vecnorm(W))*regParam
+            
+        print(curr_err_norm, next_err_norm)
+        
+        if abs(curr_err_norm - next_err_norm) < .001 or it > 20:
+            break
+        #print(next_err_norm/curr_err_norm)
+        curr_err_norm = next_err_norm
+        it += 1
+    
+    print("Number of iterations: ", it)
+    return U,V,W
+
+
 
 def main():
     
@@ -505,15 +603,24 @@ def main():
     V_CG = ctf.copy(V_SVD)
     W_CG = ctf.copy(W_SVD)
     T_CG = ctf.copy(T_SVD)
+
+    U_CG2 = ctf.copy(U_SVD)
+    V_CG2 = ctf.copy(V_SVD)
+    W_CG2 = ctf.copy(W_SVD)
+    T_CG2 = ctf.copy(T_SVD)
         
-    t = time.time()  
-    getALS_SVD(T_SVD,U_SVD,V_SVD,W_SVD,regParam,omega,I,J,K,r)   
-    print("ALS SVD costs time = ",np.round_(time.time()- t,4))    
+    #t = time.time()  
+    #getALS_SVD(T_SVD,U_SVD,V_SVD,W_SVD,regParam,omega,I,J,K,r)   
+    #print("ALS SVD costs time = ",np.round_(time.time()- t,4))    
 
 
+    #t = time.time()  
+    #getALS_CG(T_CG,U_CG,V_CG,W_CG,regParam,omega,I,J,K,r)   
+    #print("ALS iterative CG costs time = ",np.round_(time.time()- t,4))  
+
     t = time.time()  
-    getALS_CG(T_CG,U_CG,V_CG,W_CG,regParam,omega,I,J,K,r)   
-    print("ALS CG costs time = ",np.round_(time.time()- t,4))    
+    getALS_Kressner(T_CG2,U_CG2,V_CG2,W_CG2,regParam,omega,I,J,K,r)   
+    print("ALS direct CG costs time = ",np.round_(time.time()- t,4))  
 
 
 main()
