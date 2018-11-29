@@ -265,7 +265,9 @@ def CG(Ax0,b,x0,f1,f2,r,regParam,omega,I,string):
         skAsk = ctf.tensor(I)
         skAsk.i("i") << sk.i("ir") * Ask.i("ir")
         
-        alpha = rnorm/skAsk
+        #if (rnorm[i] < 1.e-30):
+        #    continue
+        alpha = rnorm/(skAsk + 1.e-30)
 
         alphask = ctf.tensor((I,r))
         alphask.i("ir") << alpha.i("i") * sk.i("ir")
@@ -277,7 +279,10 @@ def CG(Ax0,b,x0,f1,f2,r,regParam,omega,I,string):
         
         rk1norm = ctf.tensor(I)
         rk1norm.i("i") << rk1.i("ir") * rk1.i("ir")
-        beta = rk1norm/rnorm
+
+        #if (rk1norm[i] < 1.e-30):
+        #    continue
+        beta = rk1norm/(rnorm+ 1.e-30)
 
         betask = ctf.tensor((I,r))
         betask.i("ir") << beta.i("i") * sk.i("ir")
@@ -552,9 +557,9 @@ def main():
     print("CG block size = ",block)   
     print("ALS iterative CG costs time = ",np.round_(time.time()- t,4))  
 
-    #t = time.time()  
-    #getALS_Kressner(T_CG2,U_CG2,V_CG2,W_CG2,regParam,omega,I,J,K,r)   
-    #Sprint("ALS direct CG costs time = ",np.round_(time.time()- t,4))  
+    t = time.time()  
+    getALS_Kressner(T_CG2,U_CG2,V_CG2,W_CG2,regParam,omega,I,J,K,r)   
+    print("ALS direct CG costs time = ",np.round_(time.time()- t,4))  
 
 
 main()
