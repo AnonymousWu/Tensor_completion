@@ -2,6 +2,7 @@
 import ctf,time,random
 import numpy as np
 import numpy.linalg as la
+import matplotlib.pyplot as plt
 from ctf import random as crandom
 glob_comm = ctf.comm()
 #from scipy.sparse.linalg import lsqr as lsqr
@@ -461,6 +462,7 @@ def getALS_CG(T,U,V,W,regParam,omega,I,J,K,r,block):
     E = ctf.tensor((I,J,K))
     E.i("ijk") << T.i("ijk") - omega.i("ijk")*U.i("iu")*V.i("ju")*W.i("ku")
     curr_err_norm = ctf.vecnorm(E) + (ctf.vecnorm(U) + ctf.vecnorm(V) + ctf.vecnorm(W))*regParam
+    norm = [curr_err_norm]
     
     while True:
 
@@ -477,10 +479,12 @@ def getALS_CG(T,U,V,W,regParam,omega,I,J,K,r,block):
         if abs(curr_err_norm - next_err_norm) < .001 or it > 100:
             break
         curr_err_norm = next_err_norm
+        norm.append(curr_err_norm)
+
         it += 1
     
     print("Number of iterations: ", it)
-    return U,V,W
+    return norm
 
 
 def getALS_Kressner(T,U,V,W,regParam,omega,I,J,K,r):
@@ -489,6 +493,7 @@ def getALS_Kressner(T,U,V,W,regParam,omega,I,J,K,r):
     E = ctf.tensor((I,J,K))
     E.i("ijk") << T.i("ijk") - omega.i("ijk")*U.i("iu")*V.i("ju")*W.i("ku")
     curr_err_norm = ctf.vecnorm(E) + (ctf.vecnorm(U) + ctf.vecnorm(V) + ctf.vecnorm(W))*regParam
+    norm = [curr_err_norm]
     
     while True:
 
@@ -505,10 +510,12 @@ def getALS_Kressner(T,U,V,W,regParam,omega,I,J,K,r):
         if abs(curr_err_norm - next_err_norm) < .001 or it > 100:
             break
         curr_err_norm = next_err_norm
+        norm.append(curr_err_norm)
+
         it += 1
     
     print("Number of iterations: ", it)
-    return U,V,W
+    return norm
 
 
 def main():
@@ -516,16 +523,16 @@ def main():
     #ut = UnitTests()
     #ut.runAllTests()
 
-    #I = random.randint(6,6)
-    #J = random.randint(6,6)
-    #K = random.randint(6,6)
-    I = 10
-    J = 10
-    K = 10
+    I = random.randint(6,6)
+    J = random.randint(6,6)
+    K = random.randint(6,6)
+    #I = 7
+    #J = 7
+    #K = 7
     r = 2 
     sparsity = .1
     regParam = .1
-    block = 5
+    block = 2
         
     ctf.random.seed(42)
     U_SVD = ctf.random.random((I,r))
@@ -552,14 +559,23 @@ def main():
     #getALS_SVD(T_SVD,U_SVD,V_SVD,W_SVD,regParam,omega,I,J,K,r)   
     #print("ALS SVD costs time = ",np.round_(time.time()- t,4))    
 
-    t = time.time()  
-    getALS_CG(T_CG,U_CG,V_CG,W_CG,regParam,omega,I,J,K,r,block)
+    t = time.time()
+    blockCGnorm = getALS_CG(T_CG,U_CG,V_CG,W_CG,regParam,omega,I,J,K,r,block)
     print("CG block size = ",block)   
     print("ALS iterative CG costs time = ",np.round_(time.time()- t,4))  
 
-    t = time.time()  
-    getALS_Kressner(T_CG2,U_CG2,V_CG2,W_CG2,regParam,omega,I,J,K,r)   
-    print("ALS direct CG costs time = ",np.round_(time.time()- t,4))  
+    t = time.time()
+    kressnernorm = getALS_Kressner(T_CG2,U_CG2,V_CG2,W_CG2,regParam,omega,I,J,K,r)
+    print("ALS direct CG costs time = ",np.round_(time.time()- t,4))     
+
+
+    # plots
+    plt.figure()
+    plt.plot(blockCGnorm, label = "block CG with block size"+str(block))
+    plt.plot(kressnernorm, label ='Kressner')
+    plt.legend()
+    plt.title("tensor dimension: "+str(I)+"," + str(J)+","+str(K) +" rank: " + str(r) + " sparsity: " + str(sparsity))
+    plt.show()  
 
 
 main()
