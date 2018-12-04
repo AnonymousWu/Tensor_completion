@@ -4,7 +4,7 @@ import numpy as np
 import numpy.linalg as la
 from ctf import random as crandom
 glob_comm = ctf.comm()
-from scipy.sparse.linalg import lsqr as lsqr
+#from scipy.sparse.linalg import lsqr as lsqr
 
 
 class UnitTests:
@@ -474,7 +474,7 @@ def getALS_CG(T,U,V,W,regParam,omega,I,J,K,r,block):
             
         print(curr_err_norm, next_err_norm)
         
-        if abs(curr_err_norm - next_err_norm) < .001 or it > 20:
+        if abs(curr_err_norm - next_err_norm) < .001 or it > 100:
             break
         curr_err_norm = next_err_norm
         it += 1
@@ -502,7 +502,7 @@ def getALS_Kressner(T,U,V,W,regParam,omega,I,J,K,r):
             
         print(curr_err_norm, next_err_norm)
         
-        if abs(curr_err_norm - next_err_norm) < .001 or it > 20:
+        if abs(curr_err_norm - next_err_norm) < .001 or it > 100:
             break
         curr_err_norm = next_err_norm
         it += 1
@@ -516,22 +516,22 @@ def main():
     #ut = UnitTests()
     #ut.runAllTests()
 
-    I = random.randint(6,6)
-    J = random.randint(6,6)
-    K = random.randint(6,6)
-    #I = 10
-    #J = 10
-    #K = 10
+    #I = random.randint(6,6)
+    #J = random.randint(6,6)
+    #K = random.randint(6,6)
+    I = 10
+    J = 10
+    K = 10
     r = 2 
     sparsity = .1
     regParam = .1
-    block = 2
+    block = 5
         
     ctf.random.seed(42)
     U_SVD = ctf.random.random((I,r))
-    V_SVD= ctf.random.random((J,r))
-    W_SVD= ctf.random.random((K,r))
-    
+    V_SVD = ctf.random.random((J,r))
+    W_SVD = ctf.random.random((K,r))
+
     # 3rd-order tensor
     T_SVD = ctf.tensor((I,J,K),sp=True)
     T_SVD.fill_sp_random(0,1,sparsity)
