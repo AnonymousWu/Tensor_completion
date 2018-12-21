@@ -80,7 +80,11 @@ def updateOmega(T,I,J,K):
     '''
     Gets a random subset of rows for each U,V,W iteration
     '''
-    omegactf = ((T > 0)*ctf.astensor(1.))
+    if (sp==False):
+        omegactf = ((T > 0)*ctf.astensor(1.))
+    else:
+        omegactf = T / T
+    
     return omegactf
 
 def getDenseOmega(T,U,V,W,regParam,omega,I,J,K,r,idx,string):
