@@ -1,4 +1,3 @@
-
 import ctf,time,random
 import numpy as np
 import numpy.linalg as la
@@ -6,6 +5,7 @@ import matplotlib.pyplot as plt
 from ctf import random as crandom
 glob_comm = ctf.comm()
 #from scipy.sparse.linalg import lsqr as lsqr
+from function_tensor import *
 
 
 class UnitTests:
@@ -523,16 +523,16 @@ def main():
     #ut = UnitTests()
     #ut.runAllTests()
 
-    I = random.randint(6,6)
-    J = random.randint(6,6)
-    K = random.randint(6,6)
-    #I = 7
-    #J = 7
-    #K = 7
+    #I = random.randint(6,6)
+    #J = random.randint(6,6)
+    #K = random.randint(6,6)
+    I = 4
+    J = 4
+    K = 4
     r = 2 
     sparsity = .1
     regParam = .1
-    block = 2
+    block = 4
         
     ctf.random.seed(42)
     U_SVD = ctf.random.random((I,r))
@@ -540,8 +540,9 @@ def main():
     W_SVD = ctf.random.random((K,r))
 
     # 3rd-order tensor
-    T_SVD = ctf.tensor((I,J,K),sp=True)
-    T_SVD.fill_sp_random(0,1,sparsity)
+    #T_SVD = ctf.tensor((I,J,K),sp=True)
+    #T_SVD.fill_sp_random(0,1,sparsity)
+    T_SVD = function_tensor(I,J,K,sparsity)
  
     omega = updateOmega(T_SVD,I,J,K)
 
@@ -570,12 +571,12 @@ def main():
 
 
     # plots
-    plt.figure()
-    plt.plot(blockCGnorm, label = "block CG with block size"+str(block))
-    plt.plot(kressnernorm, label ='Kressner')
-    plt.legend()
-    plt.title("tensor dimension: "+str(I)+"," + str(J)+","+str(K) +" rank: " + str(r) + " sparsity: " + str(sparsity))
-    plt.show()  
+    #plt.figure()
+    #plt.plot(blockCGnorm, label = "block CG with block size"+str(block))
+    #plt.plot(kressnernorm, label ='Kressner')
+    #plt.legend()
+    #plt.title("tensor dimension: "+str(I)+"," + str(J)+","+str(K) +" rank: " + str(r) + " sparsity: " + str(sparsity))
+    #plt.show()  
 
 
 main()
