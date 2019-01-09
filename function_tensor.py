@@ -10,7 +10,7 @@ def function_tensor(I,J,K,sparsity):
     #n = 51
     #L = 100
     #nsample = 10*N*n*L #10nNL = 255000
-    n = 10
+    n = I
 
     v = np.linspace(-1,1,n)
     #v = np.arange(1,n+1)
@@ -19,7 +19,6 @@ def function_tensor(I,J,K,sparsity):
     v2 = ctf.tensor(n,sp=True)
     v2 = v
 
-    
     T = ctf.tensor((I,J,K),sp=True)
     T.fill_sp_random(1,1,sparsity)
     #T = ctf.exp(-1 * ctf.power(ctf.power(T,2),0.5))  # x = exp(-sqrt(x^2)) 
@@ -35,3 +34,5 @@ def function_tensor(I,J,K,sparsity):
     #T2 = ctf.exp(T2)
     
     return T2
+
+
