@@ -7,7 +7,6 @@ glob_comm = ctf.comm()
 #from scipy.sparse.linalg import lsqr as lsqr
 from function_tensor import *
 
-
 class UnitTests:
         
     def test_3d_purturb1(self):
@@ -80,7 +79,7 @@ def updateOmega(T,I,J,K):
     '''
     Gets a random subset of rows for each U,V,W iteration
     '''
-    if (sp==False):
+    if (T.sp==False):
         omegactf = ((T > 0)*ctf.astensor(1.))
     else:
         omegactf = T / T
@@ -478,7 +477,8 @@ def getALS_CG(T,U,V,W,regParam,omega,I,J,K,r,block):
         E.i("ijk") << T.i("ijk") - omega.i("ijk")*U.i("iu")*V.i("ju")*W.i("ku")
         next_err_norm = ctf.vecnorm(E) + (ctf.vecnorm(U) + ctf.vecnorm(V) + ctf.vecnorm(W))*regParam
             
-        print(curr_err_norm, next_err_norm)
+        if ctf.comm().rank() == 0:
+            print(curr_err_norm, next_err_norm)
         
         if abs(curr_err_norm - next_err_norm) < .001 or it > 100:
             break
@@ -487,8 +487,7 @@ def getALS_CG(T,U,V,W,regParam,omega,I,J,K,r,block):
 
         it += 1
     
-    print("Number of iterations: ", it)
-    return norm
+    return norm, it
 
 
 def getALS_Kressner(T,U,V,W,regParam,omega,I,J,K,r):
@@ -509,7 +508,8 @@ def getALS_Kressner(T,U,V,W,regParam,omega,I,J,K,r):
         E.i("ijk") << T.i("ijk") - omega.i("ijk")*U.i("iu")*V.i("ju")*W.i("ku")
         next_err_norm = ctf.vecnorm(E) + (ctf.vecnorm(U) + ctf.vecnorm(V) + ctf.vecnorm(W))*regParam
             
-        print(curr_err_norm, next_err_norm)
+        if ctf.comm().rank() == 0:
+            print(curr_err_norm, next_err_norm)
         
         if abs(curr_err_norm - next_err_norm) < .001 or it > 100:
             break
@@ -518,8 +518,7 @@ def getALS_Kressner(T,U,V,W,regParam,omega,I,J,K,r):
 
         it += 1
     
-    print("Number of iterations: ", it)
-    return norm
+    return norm, it
 
 
 def main():
@@ -565,13 +564,18 @@ def main():
     #print("ALS SVD costs time = ",np.round_(time.time()- t,4))    
 
     t = time.time()
-    blockCGnorm = getALS_CG(T_CG,U_CG,V_CG,W_CG,regParam,omega,I,J,K,r,block)
-    print("CG block size = ",block)   
-    print("ALS iterative CG costs time = ",np.round_(time.time()- t,4))  
+    blockCGnorm,blockCGit = getALS_CG(T_CG,U_CG,V_CG,W_CG,regParam,omega,I,J,K,r,block)
+    if ctf.comm().rank() == 0:
+        print("Number of iterations: ", blockCGit)
+        print("CG block size = ",block)   
+        print("ALS iterative CG costs time = ",np.round_(time.time()- t,4))  
 
+    
     t = time.time()
-    kressnernorm = getALS_Kressner(T_CG2,U_CG2,V_CG2,W_CG2,regParam,omega,I,J,K,r)
-    print("ALS direct CG costs time = ",np.round_(time.time()- t,4))     
+    kressnernorm,kressnerit = getALS_Kressner(T_CG2,U_CG2,V_CG2,W_CG2,regParam,omega,I,J,K,r)
+    if ctf.comm().rank() == 0:
+        print("Number of iterations: ", kressnerit)
+        print("ALS direct CG costs time = ",np.round_(time.time()- t,4))     
 
 
     # plots
