@@ -1,6 +1,7 @@
 import ctf,time,random
 import numpy as np
 import numpy.linalg as la
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from ctf import random as crandom
 glob_comm = ctf.comm()
@@ -543,7 +544,7 @@ def main():
     sparsity = .1
     regParam = .1
     block = 4
-    ntrails = 5
+    ntrails = 1
 
     # 3rd-order tensor
     #T_SVD = ctf.tensor((I,J,K),sp=True)
@@ -598,6 +599,7 @@ def main():
 
 #----------------------------------------- plot -------------------------------------------------#
 
+    plt.figure()
     for i in range(ntrails):
         if ctf.comm().rank() == 0:
             plt.plot(blockCGtimeList[i], blockCGerrList[i], label = "trail %d" %(i) )
@@ -605,7 +607,7 @@ def main():
             plt.title("Function tensor(%d*%d*%d), iterative block CG, block size %d, rank %d, sparsity %f" % (I,J,K,block,r,sparsity))
             plt.xlabel("Time[s]")
             plt.ylabel("Training Error Norm")
-            plt.savefig('iterative_block_CG.png', bbox_inches='tight')
+            plt.savefig('iterative_block_CG.png')
             
 
    
@@ -617,8 +619,7 @@ def main():
             plt.title("Funtion tensor(%d*%d*%d),direct CG (Kressner), rank %d, sparsity %f " % (I,J,K,r,sparsity))
             plt.xlabel("Time[s]")
             plt.ylabel("Training Error Norm")
-            plt.savefig('picture.png', bbox_inches='tight')
-
+            plt.savefig('direct_CG.png')
 
 
 main()
