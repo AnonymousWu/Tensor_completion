@@ -6,6 +6,8 @@ from ctf import random as crandom
 glob_comm = ctf.comm()
 #from scipy.sparse.linalg import lsqr as lsqr
 from function_tensor import *
+from sklearn.metrics import mean_squared_error
+from math import sqrt
 
 class UnitTests:
         
@@ -466,6 +468,8 @@ def getALS_CG(T,U,V,W,regParam,omega,I,J,K,r,block):
     E.i("ijk") << T.i("ijk") - omega.i("ijk")*U.i("iu")*V.i("ju")*W.i("ku")
     curr_err_norm = ctf.vecnorm(E) + (ctf.vecnorm(U) + ctf.vecnorm(V) + ctf.vecnorm(W))*regParam
     norm = [curr_err_norm]
+    timeList = [0]
+    t= time.time()
     
     while True:
 
@@ -482,12 +486,13 @@ def getALS_CG(T,U,V,W,regParam,omega,I,J,K,r,block):
         
         if abs(curr_err_norm - next_err_norm) < .001 or it > 100:
             break
+
         curr_err_norm = next_err_norm
         norm.append(curr_err_norm)
-
+        timeList.append(np.round_(time.time()- t,4))
         it += 1
     
-    return norm, it
+    return norm, it, timeList
 
 
 def getALS_Kressner(T,U,V,W,regParam,omega,I,J,K,r):
@@ -497,6 +502,8 @@ def getALS_Kressner(T,U,V,W,regParam,omega,I,J,K,r):
     E.i("ijk") << T.i("ijk") - omega.i("ijk")*U.i("iu")*V.i("ju")*W.i("ku")
     curr_err_norm = ctf.vecnorm(E) + (ctf.vecnorm(U) + ctf.vecnorm(V) + ctf.vecnorm(W))*regParam
     norm = [curr_err_norm]
+    timeList = [0]
+    t= time.time()
     
     while True:
 
@@ -515,10 +522,10 @@ def getALS_Kressner(T,U,V,W,regParam,omega,I,J,K,r):
             break
         curr_err_norm = next_err_norm
         norm.append(curr_err_norm)
-
+        timeList.append(np.round_(time.time()- t,4))
         it += 1
     
-    return norm, it
+    return norm, it, timeList
 
 
 def main():
@@ -536,11 +543,7 @@ def main():
     sparsity = .1
     regParam = .1
     block = 4
-        
-    ctf.random.seed(42)
-    U_SVD = ctf.random.random((I,r))
-    V_SVD = ctf.random.random((J,r))
-    W_SVD = ctf.random.random((K,r))
+    ntrails = 5
 
     # 3rd-order tensor
     #T_SVD = ctf.tensor((I,J,K),sp=True)
@@ -549,42 +552,73 @@ def main():
  
     omega = updateOmega(T_SVD,I,J,K)
 
-    U_CG = ctf.copy(U_SVD)
-    V_CG = ctf.copy(V_SVD)
-    W_CG = ctf.copy(W_SVD)
-    T_CG = ctf.copy(T_SVD)
 
-    U_CG2 = ctf.copy(U_SVD)
-    V_CG2 = ctf.copy(V_SVD)
-    W_CG2 = ctf.copy(W_SVD)
-    T_CG2 = ctf.copy(T_SVD)
+    blockCGerrList = []
+    blockCGtimeList = []
+    KressnererrList = []
+    KressnertimeList = []
+    for i in range(ntrails):   
+        
+        ctf.random.seed(42+i)
+        U_SVD = ctf.random.random((I,r))
+        V_SVD = ctf.random.random((J,r))
+        W_SVD = ctf.random.random((K,r))
+
+        U_CG = ctf.copy(U_SVD)
+        V_CG = ctf.copy(V_SVD)
+        W_CG = ctf.copy(W_SVD)
+        T_CG = ctf.copy(T_SVD)
+
+        U_CG2 = ctf.copy(U_SVD)
+        V_CG2 = ctf.copy(V_SVD)
+        W_CG2 = ctf.copy(W_SVD)
+        T_CG2 = ctf.copy(T_SVD)
         
     #t = time.time()  
     #getALS_SVD(T_SVD,U_SVD,V_SVD,W_SVD,regParam,omega,I,J,K,r)   
     #print("ALS SVD costs time = ",np.round_(time.time()- t,4))    
 
-    t = time.time()
-    blockCGnorm,blockCGit = getALS_CG(T_CG,U_CG,V_CG,W_CG,regParam,omega,I,J,K,r,block)
-    if ctf.comm().rank() == 0:
-        print("Number of iterations: ", blockCGit)
-        print("CG block size = ",block)   
-        print("ALS iterative CG costs time = ",np.round_(time.time()- t,4))  
+        t = time.time()
+        blockCGnorm,blockCGit,blockCGtime = getALS_CG(T_CG,U_CG,V_CG,W_CG,regParam,omega,I,J,K,r,block)
+        blockCGerrList.append(blockCGnorm)
+        blockCGtimeList.append(blockCGtime)
+        if ctf.comm().rank() == 0:
+            print("Number of iterations: ", blockCGit)
+            print("CG block size = ",block)   
+            print("ALS iterative CG costs time = ",np.round_(time.time()- t,4))  
 
-    
-    t = time.time()
-    kressnernorm,kressnerit = getALS_Kressner(T_CG2,U_CG2,V_CG2,W_CG2,regParam,omega,I,J,K,r)
-    if ctf.comm().rank() == 0:
-        print("Number of iterations: ", kressnerit)
-        print("ALS direct CG costs time = ",np.round_(time.time()- t,4))     
+        t = time.time()
+        kressnernorm,kressnerit,kressnertime = getALS_Kressner(T_CG2,U_CG2,V_CG2,W_CG2,regParam,omega,I,J,K,r)
+        KressnererrList.append(kressnernorm)
+        KressnertimeList.append(kressnertime)
+        if ctf.comm().rank() == 0:
+            print("Number of iterations: ", kressnerit)
+            print("ALS direct CG costs time = ",np.round_(time.time()- t,4))     
 
 
-    # plots
-    #plt.figure()
-    #plt.plot(blockCGnorm, label = "block CG with block size"+str(block))
-    #plt.plot(kressnernorm, label ='Kressner')
-    #plt.legend()
-    #plt.title("tensor dimension: "+str(I)+"," + str(J)+","+str(K) +" rank: " + str(r) + " sparsity: " + str(sparsity))
-    #plt.show()  
+#----------------------------------------- plot -------------------------------------------------#
+
+    for i in range(ntrails):
+        if ctf.comm().rank() == 0:
+            plt.plot(blockCGtimeList[i], blockCGerrList[i], label = "trail %d" %(i) )
+            plt.legend()
+            plt.title("Function tensor(%d*%d*%d), iterative block CG, block size %d, rank %d, sparsity %f" % (I,J,K,block,r,sparsity))
+            plt.xlabel("Time[s]")
+            plt.ylabel("Training Error Norm")
+            plt.savefig('iterative_block_CG.png', bbox_inches='tight')
+            
+
+   
+    plt.figure()
+    for i in range(ntrails):
+        if ctf.comm().rank() == 0:
+            plt.plot(KressnertimeList[i], KressnererrList[i], label = "trail %d" %(i))
+            plt.legend()
+            plt.title("Funtion tensor(%d*%d*%d),direct CG (Kressner), rank %d, sparsity %f " % (I,J,K,r,sparsity))
+            plt.xlabel("Time[s]")
+            plt.ylabel("Training Error Norm")
+            plt.savefig('picture.png', bbox_inches='tight')
+
 
 
 main()
