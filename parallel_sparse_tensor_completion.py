@@ -583,17 +583,17 @@ def main():
         blockCGerrList.append(blockCGnorm)
         blockCGtimeList.append(blockCGtime)
         if ctf.comm().rank() == 0:
-            print("Number of iterations: ", blockCGit)
-            print("CG block size = ",block)   
-            print("ALS iterative CG costs time = ",np.round_(time.time()- t,4))  
+            print("Number of iterations: %d" % (blockCGit))
+            print("CG block size: %d " % (block))   
+            print("ALS iterative CG costs time: %f" %(np.round_(time.time()- t,4)))  
 
         t = time.time()
         kressnernorm,kressnerit,kressnertime = getALS_Kressner(T_CG2,U_CG2,V_CG2,W_CG2,regParam,omega,I,J,K,r)
         KressnererrList.append(kressnernorm)
         KressnertimeList.append(kressnertime)
         if ctf.comm().rank() == 0:
-            print("Number of iterations: ", kressnerit)
-            print("ALS direct CG costs time = ",np.round_(time.time()- t,4))     
+            print("Number of iterations: %d" % (kressnerit))
+            print("ALS direct CG costs time: %f" %(np.round_(time.time()- t,4)))   
 
 
 #----------------------------------------- plot -------------------------------------------------#
