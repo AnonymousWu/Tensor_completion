@@ -414,21 +414,27 @@ def Kressner(A,b,factor,r,regParam):
     return factor   
 
 
+
 def updateFactor_Kressner(T,U,V,W,regParam,omega,I,J,K,r,string):
+
+    t = time.time()
 
     if (string=="U"):
         #M1 = ctf.tensor((J,K,r))
         #M1.i("jku") << V.i("ju")*W.i("ku")
         for i in range(I):
             A = ctf.tensor((r,r),sp=True)
-            A.i("uv") << V.i("Ju")*W.i("Ku") * omega[i,:,:].i("JK")*V.i("Jv")*W.i("Kv")
+            sliced_omega = omega[i,:,:]
+            A.i("uv") << V.i("Ju")*W.i("Ku") * sliced_omega.i("JK")*V.i("Jv")*W.i("Kv")
             assert(A.sp==1)
             #assert(omega[i,:,:].sp==1)     TODO!
+
             b = ctf.tensor(r,sp=True)
-            b.i("r") << V.i("Jr")*W.i("Kr") * T[i,:,:].i("JK")  # RHS; ATb
+            sliced_T = T[i,:,:]
+            b.i("r") << V.i("Jr")*W.i("Kr") * sliced_T.i("JK")  # RHS; ATb
             assert(b.sp==1)    
-            U[i,:].set_zero()
-            U[i,:]= Kressner(A,b,U[i,:],r,regParam)     
+            U[i,:].set_zero()            
+            U[i,:]= Kressner(A,b,U[i,:],r,regParam)    
 
         assert(U.sp==1)
         return U
@@ -520,12 +526,13 @@ def getALS_CG(T,U,V,W,regParam,omega,I,J,K,r,block):
             
         if ctf.comm().rank() == 0:
             print(curr_err_norm, next_err_norm)
+            it += 1
         
         if abs(curr_err_norm - next_err_norm) < .001 or it > 100:
             break
 
         curr_err_norm = next_err_norm
-        it += 1
+        
 
     nt = np.round_(time.time()- t,4)
     
@@ -534,14 +541,16 @@ def getALS_CG(T,U,V,W,regParam,omega,I,J,K,r,block):
 
 def getALS_Kressner(T,U,V,W,regParam,omega,I,J,K,r):
 
+    t0 = time.time()
     it = 0
     E = ctf.tensor((I,J,K),sp=True)
     E.i("ijk") << T.i("ijk") - omega.i("ijk")*U.i("iu")*V.i("ju")*W.i("ku")
     assert(E.sp ==1)
     curr_err_norm = ctf.vecnorm(E) + (ctf.vecnorm(U) + ctf.vecnorm(V) + ctf.vecnorm(W))*regParam
-    t= time.time()
     
     while True:
+
+        t = time.time()
 
         U = updateFactor_Kressner(T,U,V,W,regParam,omega,I,J,K,r,"U")
         assert(U.sp==1)
@@ -557,13 +566,14 @@ def getALS_Kressner(T,U,V,W,regParam,omega,I,J,K,r):
             
         if ctf.comm().rank() == 0:
             print(curr_err_norm, next_err_norm)
-        
+            it +=1
+       
         if abs(curr_err_norm - next_err_norm) < .001 or it > 100:
             break
         curr_err_norm = next_err_norm
-        it += 1
+       
 
-    nt = np.round_(time.time()- t,4)
+    nt = np.round_(time.time()- t0,4)
     
     return it, nt
 
@@ -580,7 +590,7 @@ def main():
     J = 4
     K = 4
     r = 2 
-    sparsity = .1
+    sparsity = .8
     regParam = .1
     block = 2
 
@@ -612,12 +622,14 @@ def main():
     #getALS_SVD(T_SVD,U_SVD,V_SVD,W_SVD,regParam,omega,I,J,K,r)   
     #print("ALS SVD costs time = ",np.round_(time.time()- t,4))    
 
+    print("--------------------------------ALS iterative CG------------------------")
     blockCGit,blockCGtime = getALS_CG(T_CG,U_CG,V_CG,W_CG,regParam,omega,I,J,K,r,block)
     if ctf.comm().rank() == 0:
         print("Number of iterations: %d" % (blockCGit))
         print("CG block size: %d " % (block))   
         print("ALS iterative CG costs time: %f" %(blockCGtime))  
-    t = time.time()
+
+    print("--------------------------------ALS direct SVD------------------------")
     kressnerit,kressnertime = getALS_Kressner(T_CG2,U_CG2,V_CG2,W_CG2,regParam,omega,I,J,K,r)
     if ctf.comm().rank() == 0:
         print("Number of iterations: %d" % (kressnerit))
