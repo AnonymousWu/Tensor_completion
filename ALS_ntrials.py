@@ -468,7 +468,8 @@ def getALS_CG(T,U,V,W,regParam,omega,I,J,K,r,block):
     it = 0
     E = ctf.tensor((I,J,K))
     E.i("ijk") << T.i("ijk") - omega.i("ijk")*U.i("iu")*V.i("ju")*W.i("ku")
-    curr_err_norm = ctf.vecnorm(E) + (ctf.vecnorm(U) + ctf.vecnorm(V) + ctf.vecnorm(W))*regParam
+    NNZ = T.read_local_nnz()[1].shape[0]    # number of nonzero entries, i.e. sample size
+    curr_err_norm = (ctf.vecnorm(E) + (ctf.vecnorm(U) + ctf.vecnorm(V) + ctf.vecnorm(W))*regParam)/NNZ
     norm = [curr_err_norm]
     timeList = [0]
     t= time.time()
@@ -481,12 +482,12 @@ def getALS_CG(T,U,V,W,regParam,omega,I,J,K,r,block):
         
         E.set_zero()
         E.i("ijk") << T.i("ijk") - omega.i("ijk")*U.i("iu")*V.i("ju")*W.i("ku")
-        next_err_norm = ctf.vecnorm(E) + (ctf.vecnorm(U) + ctf.vecnorm(V) + ctf.vecnorm(W))*regParam
+        next_err_norm = (ctf.vecnorm(E) + (ctf.vecnorm(U) + ctf.vecnorm(V) + ctf.vecnorm(W))*regParam)/NNZ
             
         if ctf.comm().rank() == 0:
             print(curr_err_norm, next_err_norm)
         
-        if abs(curr_err_norm - next_err_norm) < .001 or it > 100:
+        if abs(curr_err_norm - next_err_norm) < .0001 or it > 100:
             break
 
         curr_err_norm = next_err_norm
@@ -502,7 +503,8 @@ def getALS_Kressner(T,U,V,W,regParam,omega,I,J,K,r):
     it = 0
     E = ctf.tensor((I,J,K))
     E.i("ijk") << T.i("ijk") - omega.i("ijk")*U.i("iu")*V.i("ju")*W.i("ku")
-    curr_err_norm = ctf.vecnorm(E) + (ctf.vecnorm(U) + ctf.vecnorm(V) + ctf.vecnorm(W))*regParam
+    NNZ = T.read_local_nnz()[1].shape[0]    # number of nonzero entries, i.e. sample size
+    curr_err_norm = (ctf.vecnorm(E) + (ctf.vecnorm(U) + ctf.vecnorm(V) + ctf.vecnorm(W))*regParam)/NNZ
     norm = [curr_err_norm]
     timeList = [0]
     t= time.time()
@@ -515,12 +517,12 @@ def getALS_Kressner(T,U,V,W,regParam,omega,I,J,K,r):
         
         E.set_zero()
         E.i("ijk") << T.i("ijk") - omega.i("ijk")*U.i("iu")*V.i("ju")*W.i("ku")
-        next_err_norm = ctf.vecnorm(E) + (ctf.vecnorm(U) + ctf.vecnorm(V) + ctf.vecnorm(W))*regParam
+        next_err_norm = (ctf.vecnorm(E) + (ctf.vecnorm(U) + ctf.vecnorm(V) + ctf.vecnorm(W))*regParam)/NNZ
             
         if ctf.comm().rank() == 0:
             print(curr_err_norm, next_err_norm)
         
-        if abs(curr_err_norm - next_err_norm) < .001 or it > 100:
+        if abs(curr_err_norm - next_err_norm) < .0001 or it > 100:
             break
         curr_err_norm = next_err_norm
         norm.append(curr_err_norm)
@@ -545,7 +547,7 @@ def main():
     sparsity = .1
     regParam = .1
     block = 4
-    ntrails = 2
+    ntrails = 5
 
     # 3rd-order tensor
     #T_SVD = ctf.tensor((I,J,K),sp=True)
@@ -562,9 +564,9 @@ def main():
     for i in range(ntrails):   
         
         ctf.random.seed(42+i)
-        U_SVD = ctf.random.random((I,r))
-        V_SVD = ctf.random.random((J,r))
-        W_SVD = ctf.random.random((K,r))
+        U_SVD = ctf.random.random((I,r),sp=True)
+        V_SVD = ctf.random.random((J,r),sp=True)
+        W_SVD = ctf.random.random((K,r),sp=True)
 
         U_CG = ctf.copy(U_SVD)
         V_CG = ctf.copy(V_SVD)
