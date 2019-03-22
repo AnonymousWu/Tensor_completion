@@ -7,7 +7,9 @@ import matplotlib.pyplot as plt
 from ctf import random as crandom
 glob_comm = ctf.comm()
 #from scipy.sparse.linalg import lsqr as lsqr
-from function_tensor import *
+import sys
+sys.path.append('../')
+from data.function_tensor.function_tensor import *
 from sklearn.metrics import mean_squared_error
 from math import sqrt
 
