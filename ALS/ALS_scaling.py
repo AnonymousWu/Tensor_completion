@@ -250,7 +250,6 @@ def updateFactor_SVD(T,U,V,W,regParam,omega,I,J,K,r,string):
 
 
 def CG(Ax0,b,x0,f1,f2,r,regParam,omega,I,string):
-    t = time.time()
     rk = b - Ax0
     sk = rk
     xk = x0
@@ -310,9 +309,6 @@ def CG(Ax0,b,x0,f1,f2,r,regParam,omega,I,string):
         xk = xk1
         sk = sk1
         #print("rk",ctf.vecnorm(rk))
-
-    # if ctf.comm().rank() == 0:
-    #     print("CG cost %f seconds" %(np.round_(time.time()- t,4)))
     return xk
 
 
@@ -330,10 +326,7 @@ def updateFactor_CG(T,U,V,W,regParam,omega,I,J,K,r,block,string):
 
         size = int(I/block)
         for n in range(block): 
-            t = time.time()
             nomega = omega[n*size : (n+1)*size,:,:]
-            # if ctf.comm().rank() == 0:
-            #     print("slicing omega cost %f seconds" % (np.round_(time.time()- t,4)))
             #assert(nomega.sp == 1)
             # ------------------ SPARSITY NOT PRESERVED IN THE ABOVE LINE ----------------#
 
@@ -342,17 +335,11 @@ def updateFactor_CG(T,U,V,W,regParam,omega,I,J,K,r,block,string):
             #Ax0.i("ir") << M.i("jkr")*dense_omega.i("jkti")*dense_omega.i("jktI")*M.i("jkR")*x0.i("IR")
             Ax0.i("ir") << V.i("Jr")*W.i("Kr")*nomega.i("iJK")*V.i("JR")*W.i("KR")*x0.i("iR")  # LHS; ATA using matrix-vector multiplication
             Ax0 += regParam*x0 
-            # if ctf.comm().rank() == 0:
-            # 	#blockCG_contraction_time += time.time()- t
-            # 	print("contraction to form LHS cost %f seconds" % (np.round_(time.time()- t,4)))
-            # assert(Ax0.sp == 1)
+            assert(Ax0.sp == 1)
 
             b = ctf.tensor((size,r),sp=True)
             #b.i("ir") << M.i("JKr") * dense_omega.i("JKti") * dense_omega.i("JKtI") * T.i("IJK")
             b.i("ir") << V.i("Jr")*W.i("Kr")*T[n*size : (n+1)*size,:,:].i("iJK")  # RHS; ATb
-            # if ctf.comm().rank() == 0:
-            # 	#blockCG_contraction_time += time.time()- t
-            # 	print("contraction to form RHS cost %f seconds" % (np.round_(time.time()- t,4)))
             assert(b.sp == 1)
         
             U[n*size : (n+1)*size,:].set_zero()
@@ -420,43 +407,33 @@ def updateFactor_CG(T,U,V,W,regParam,omega,I,J,K,r,block,string):
 
 
 def Kressner(A,b,factor,r,regParam):
-    t = time.time()
     [U_,S_,VT_] = ctf.svd(A)
     S_ = 1/(S_+regParam*ctf.ones(S_.shape))
     factor.set_zero()
     factor.i("r") << VT_.i("kr")*S_.i("k")*U_.i("tk")*b.i("t")
     #assert(factor.sp==1)       TODO!!
     
-    # if ctf.comm().rank() == 0:
-    #     print("SVD cost %f seconds" %(np.round_(time.time()- t,4)))
     return factor   
 
 
 
 def updateFactor_Kressner(T,U,V,W,regParam,omega,I,J,K,r,string):
 
+    t = time.time()
+
     if (string=="U"):
         #M1 = ctf.tensor((J,K,r))
         #M1.i("jku") << V.i("ju")*W.i("ku")
         for i in range(I):
-            t = time.time()
             A = ctf.tensor((r,r),sp=True)
             sliced_omega = omega[i,:,:]
-            # if ctf.comm().rank() == 0:
-            #     print("slicing omega cost %f seconds" % (np.round_(time.time()- t,4)))
             A.i("uv") << V.i("Ju")*W.i("Ku") * sliced_omega.i("JK")*V.i("Jv")*W.i("Kv")
-            # if ctf.comm().rank() == 0:
-            #     print("contraction to form LHS cost %f seconds" % (np.round_(time.time()- t,4)))
             assert(A.sp==1)
             #assert(omega[i,:,:].sp==1)     TODO!
 
             b = ctf.tensor(r,sp=True)
             sliced_T = T[i,:,:]
-            # if ctf.comm().rank() == 0:
-            #     print("slicing original tensor cost %f seconds" % (np.round_(time.time()- t,4)))
             b.i("r") << V.i("Jr")*W.i("Kr") * sliced_T.i("JK")  # RHS; ATb
-            # if ctf.comm().rank() == 0:
-            #     print("contraction to form RHS cost %f seconds" % (np.round_(time.time()- t,4)))
             assert(b.sp==1)    
             U[i,:].set_zero()            
             U[i,:]= Kressner(A,b,U[i,:],r,regParam)    
@@ -515,33 +492,27 @@ def getALS_SVD(T,U,V,W,regParam,omega,I,J,K,r):
         E.i("ijk") << T.i("ijk") - omega.i("ijk")*U.i("iu")*V.i("ju")*W.i("ku")
         next_err_norm = ctf.vecnorm(E) + (ctf.vecnorm(U) + ctf.vecnorm(V) + ctf.vecnorm(W))*regParam
             
-        if ctf.comm().rank() == 0:
-            print(curr_err_norm, next_err_norm)
+        print(curr_err_norm, next_err_norm)
         
         if abs(curr_err_norm - next_err_norm) < .001 or it > 20:
             break
         curr_err_norm = next_err_norm
         it += 1
     
-    if ctf.comm().rank() == 0:
-        print("Number of iterations: ", it)
+    print("Number of iterations: ", it)
     return U,V,W
 
 
 def getALS_CG(T,U,V,W,regParam,omega,I,J,K,r,block):
  
-    t0= time.time()
     it = 0
     E = ctf.tensor((I,J,K),sp=True)
     E.i("ijk") << T.i("ijk") - omega.i("ijk")*U.i("iu")*V.i("ju")*W.i("ku")
-    # if ctf.comm().rank() == 0:
-    #     print("contraction to form the error tensor cost %f seconds" % (np.round_(time.time()- t0,4)))
     assert(E.sp==1)
     curr_err_norm = ctf.vecnorm(E) + (ctf.vecnorm(U) + ctf.vecnorm(V) + ctf.vecnorm(W))*regParam
+    t= time.time()
     
     while True:
-
-        t = time.time()
 
         U = updateFactor_CG(T,U,V,W,regParam,omega,I,J,K,r,block,"U")
         assert(U.sp==1)
@@ -549,8 +520,6 @@ def getALS_CG(T,U,V,W,regParam,omega,I,J,K,r,block):
         assert(V.sp==1)
         W = updateFactor_CG(T,U,V,W,regParam,omega,I,J,K,r,block,"W")
         assert(W.sp==1)
-        # if ctf.comm().rank() == 0:
-        #     print("CG update factor matrices in the following iteration cost %f seconds" % np.round_(time.time()- t,4));
         
         E.set_zero()
         E.i("ijk") << T.i("ijk") - omega.i("ijk")*U.i("iu")*V.i("ju")*W.i("ku")
@@ -567,7 +536,7 @@ def getALS_CG(T,U,V,W,regParam,omega,I,J,K,r,block):
         curr_err_norm = next_err_norm
         
 
-    nt = np.round_(time.time()- t0,4)
+    nt = np.round_(time.time()- t,4)
     
     return it, nt
 
@@ -578,8 +547,6 @@ def getALS_Kressner(T,U,V,W,regParam,omega,I,J,K,r):
     it = 0
     E = ctf.tensor((I,J,K),sp=True)
     E.i("ijk") << T.i("ijk") - omega.i("ijk")*U.i("iu")*V.i("ju")*W.i("ku")
-    # if ctf.comm().rank() == 0:
-    #     print("contraction to form the error tensor cost %f seconds" % (np.round_(time.time()- t0,4)))
     assert(E.sp ==1)
     curr_err_norm = ctf.vecnorm(E) + (ctf.vecnorm(U) + ctf.vecnorm(V) + ctf.vecnorm(W))*regParam
     
@@ -593,8 +560,6 @@ def getALS_Kressner(T,U,V,W,regParam,omega,I,J,K,r):
         assert(V.sp==1)
         W = updateFactor_Kressner(T,U,V,W,regParam,omega,I,J,K,r,"W")
         assert(W.sp==1)
-        # if ctf.comm().rank() == 0:
-        #     print("SVD update factor matrices in the following iteration cost %f seconds" % np.round_(time.time()- t,4));
         
         E.set_zero()
         E.i("ijk") << T.i("ijk") - omega.i("ijk")*U.i("iu")*V.i("ju")*W.i("ku")
@@ -616,7 +581,7 @@ def getALS_Kressner(T,U,V,W,regParam,omega,I,J,K,r):
 
 
 def main():
-
+    
     #ut = UnitTests()
     #ut.runAllTests()
 
@@ -627,24 +592,24 @@ def main():
     J = 8
     K = 8
     r = 2 
+    #sparsity = .1
     regParam = .1
     block = 2
-
 
     blockCGtimeList = []
     KressnertimeList = []
     nnz = []
+    #sparsityList = [.1]
     sparsityList = [.001, .01, .1, .5]
     for sparsity in sparsityList:
 
-        # 3rd-order tensor
-        #T_SVD = ctf.tensor((I,J,K),sp=True)
-        #T_SVD.fill_sp_random(0,1,sparsity)
         T_SVD = function_tensor(I,J,K,sparsity)
         assert(T_SVD.sp == 1)
 
-        nnz.append(T_SVD.nnz_tot)
- 
+        curr_nnz = T_SVD.nnz_tot
+        nnz.append(curr_nnz)
+        print("Number of non-zeros: %d" % curr_nnz)
+
         omega = updateOmega(T_SVD,I,J,K)
         assert(omega.sp == 1)
         
@@ -662,31 +627,25 @@ def main():
         V_CG2 = ctf.copy(V_SVD)
         W_CG2 = ctf.copy(W_SVD)
         T_CG2 = ctf.copy(T_SVD)
-        
-    #t = time.time()  
-    #getALS_SVD(T_SVD,U_SVD,V_SVD,W_SVD,regParam,omega,I,J,K,r)   
-    #print("ALS SVD costs time = ",np.round_(time.time()- t,4))    
+         
 
-
-        if ctf.comm().rank() == 0:
-            print("--------------------------------ALS iterative CG------------------------")
+        print("--------------------------------ALS iterative CG------------------------")
         blockCGit,blockCGtime = getALS_CG(T_CG,U_CG,V_CG,W_CG,regParam,omega,I,J,K,r,block)
         blockCGtimeList.append(blockCGtime)
         if ctf.comm().rank() == 0:
-    	   #print_CG_time_summary()
-           print("Number of non-zero entries: %d" % T_SVD.nnz_tot)
-           print("Number of iterations: %d" % (blockCGit))
-           print("CG block size: %d " % (block))   
-           print("ALS iterative CG costs time: %f" %(blockCGtime))  
+            print("Number of iterations: %d" % (blockCGit))
+            print("CG block size: %d " % (block))   
+            print("ALS iterative CG costs time: %f" %(blockCGtime))  
 
-        if ctf.comm().rank() == 0:
-            print("--------------------------------ALS direct SVD------------------------")
+        print("--------------------------------ALS direct SVD------------------------")
         kressnerit,kressnertime = getALS_Kressner(T_CG2,U_CG2,V_CG2,W_CG2,regParam,omega,I,J,K,r)
         KressnertimeList.append(kressnertime)
         if ctf.comm().rank() == 0:
-            print("Number of non-zero entries: %d" % T_SVD.nnz_tot)
             print("Number of iterations: %d" % (kressnerit))
             print("ALS direct CG costs time: %f" %(kressnertime))   
+
+
+
 
     #----------------------------------------- plot -------------------------------------------------#
 
@@ -701,11 +660,7 @@ def main():
         plt.savefig('scale.png')
             
 
-
-
-
-if __name__== "__main__":
-	main()
+main()
 
 
 

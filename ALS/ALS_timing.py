@@ -13,6 +13,9 @@ from data.function_tensor.function_tensor import *
 from sklearn.metrics import mean_squared_error
 from math import sqrt
 
+
+print_flag = False
+
 class UnitTests:
         
     def test_3d_purturb1(self):
@@ -250,7 +253,7 @@ def updateFactor_SVD(T,U,V,W,regParam,omega,I,J,K,r,string):
 
 
 def CG(Ax0,b,x0,f1,f2,r,regParam,omega,I,string):
-    t = time.time()
+    #t = time.time()
     rk = b - Ax0
     sk = rk
     xk = x0
@@ -311,8 +314,8 @@ def CG(Ax0,b,x0,f1,f2,r,regParam,omega,I,string):
         sk = sk1
         #print("rk",ctf.vecnorm(rk))
 
-    if ctf.comm().rank() == 0:
-        print("CG cost %f seconds" %(np.round_(time.time()- t,4)))
+    # if ctf.comm().rank() == 0:
+    #     print("CG cost %f seconds" %(np.round_(time.time()- t,4)))
     return xk
 
 
@@ -332,7 +335,7 @@ def updateFactor_CG(T,U,V,W,regParam,omega,I,J,K,r,block,string):
         for n in range(block): 
             t = time.time()
             nomega = omega[n*size : (n+1)*size,:,:]
-            if ctf.comm().rank() == 0:
+            if print_flag and ctf.comm().rank() == 0:
                 print("slicing omega cost %f seconds" % (np.round_(time.time()- t,4)))
             #assert(nomega.sp == 1)
             # ------------------ SPARSITY NOT PRESERVED IN THE ABOVE LINE ----------------#
@@ -342,7 +345,7 @@ def updateFactor_CG(T,U,V,W,regParam,omega,I,J,K,r,block,string):
             #Ax0.i("ir") << M.i("jkr")*dense_omega.i("jkti")*dense_omega.i("jktI")*M.i("jkR")*x0.i("IR")
             Ax0.i("ir") << V.i("Jr")*W.i("Kr")*nomega.i("iJK")*V.i("JR")*W.i("KR")*x0.i("iR")  # LHS; ATA using matrix-vector multiplication
             Ax0 += regParam*x0 
-            if ctf.comm().rank() == 0:
+            if print_flag and ctf.comm().rank() == 0:
             	#blockCG_contraction_time += time.time()- t
             	print("contraction to form LHS cost %f seconds" % (np.round_(time.time()- t,4)))
             assert(Ax0.sp == 1)
@@ -350,7 +353,7 @@ def updateFactor_CG(T,U,V,W,regParam,omega,I,J,K,r,block,string):
             b = ctf.tensor((size,r),sp=True)
             #b.i("ir") << M.i("JKr") * dense_omega.i("JKti") * dense_omega.i("JKtI") * T.i("IJK")
             b.i("ir") << V.i("Jr")*W.i("Kr")*T[n*size : (n+1)*size,:,:].i("iJK")  # RHS; ATb
-            if ctf.comm().rank() == 0:
+            if print_flag and ctf.comm().rank() == 0:
             	#blockCG_contraction_time += time.time()- t
             	print("contraction to form RHS cost %f seconds" % (np.round_(time.time()- t,4)))
             assert(b.sp == 1)
@@ -420,15 +423,15 @@ def updateFactor_CG(T,U,V,W,regParam,omega,I,J,K,r,block,string):
 
 
 def Kressner(A,b,factor,r,regParam):
-    t = time.time()
+    # t = time.time()
     [U_,S_,VT_] = ctf.svd(A)
     S_ = 1/(S_+regParam*ctf.ones(S_.shape))
     factor.set_zero()
     factor.i("r") << VT_.i("kr")*S_.i("k")*U_.i("tk")*b.i("t")
     #assert(factor.sp==1)       TODO!!
     
-    if ctf.comm().rank() == 0:
-        print("SVD cost %f seconds" %(np.round_(time.time()- t,4)))
+    # if ctf.comm().rank() == 0:
+    #     print("SVD cost %f seconds" %(np.round_(time.time()- t,4)))
     return factor   
 
 
@@ -442,20 +445,20 @@ def updateFactor_Kressner(T,U,V,W,regParam,omega,I,J,K,r,string):
             t = time.time()
             A = ctf.tensor((r,r),sp=True)
             sliced_omega = omega[i,:,:]
-            if ctf.comm().rank() == 0:
+            if print_flag and ctf.comm().rank() == 0:
                 print("slicing omega cost %f seconds" % (np.round_(time.time()- t,4)))
             A.i("uv") << V.i("Ju")*W.i("Ku") * sliced_omega.i("JK")*V.i("Jv")*W.i("Kv")
-            if ctf.comm().rank() == 0:
+            if print_flag and ctf.comm().rank() == 0:
                 print("contraction to form LHS cost %f seconds" % (np.round_(time.time()- t,4)))
             assert(A.sp==1)
             #assert(omega[i,:,:].sp==1)     TODO!
 
             b = ctf.tensor(r,sp=True)
             sliced_T = T[i,:,:]
-            if ctf.comm().rank() == 0:
+            if print_flag and ctf.comm().rank() == 0:
                 print("slicing original tensor cost %f seconds" % (np.round_(time.time()- t,4)))
             b.i("r") << V.i("Jr")*W.i("Kr") * sliced_T.i("JK")  # RHS; ATb
-            if ctf.comm().rank() == 0:
+            if print_flag and ctf.comm().rank() == 0:
                 print("contraction to form RHS cost %f seconds" % (np.round_(time.time()- t,4)))
             assert(b.sp==1)    
             U[i,:].set_zero()            
