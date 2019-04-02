@@ -5,15 +5,57 @@ import time
 glob_comm = ctf.comm()
 import numpy as np
 
+def function_tensor(I,J,K,sparsity):
+    #N = 5
+    #n = 51
+    #L = 100
+    #nsample = 10*N*n*L #10nNL = 255000
+    n = I
+
+    v = np.linspace(-1,1,n)
+    #v = np.arange(1,n+1)
+    v = ctf.astensor(v**2)
+    
+    v2 = ctf.tensor(n)
+    v2 = v
+
+    T = ctf.tensor((I,J,K))
+    T.fill_sp_random(1,1,sparsity)
+    #T = ctf.exp(-1 * ctf.power(ctf.power(T,2),0.5))  # x = exp(-sqrt(x^2)) 
+
+    T2 = ctf.tensor((I,J,K))
+    T2.i("ijk") << T.i("ijk") * v2.i("i")
+    T2.i("ijk") << T.i("ijk") * v2.i("j")
+    T2.i("ijk") << T.i("ijk") * v2.i("k")
+    
+    T2 = ctf.power(T2,0.5)
+
+    T2 = (-1.0) * T2
+    
+    #T2 = ctf.exp(T2)
+    
+    return T2
 
 def getOmega(T):
-    omegactf = ((T > 0)*ctf.astensor(1.))
+    if not T.sp:
+        omegactf = ((T > 0)*ctf.astensor(1.))
+    else:
+        omegactf = T / T
+        assert(omegactf.sp)
+    
     return omegactf
 
 def get_objective(T,U,V,W,I,J,K,omega,regParam):
 	L = ctf.tensor((I,J,K))
+	t0 = time.time()
 	L.i("ijk") << T.i("ijk") - omega.i("ijk")*U.i("iu")*V.i("ju")*W.i("ku")
-	return ctf.vecnorm(L) + (ctf.vecnorm(U) + ctf.vecnorm(V) + ctf.vecnorm(W)) * regParam
+	t1 = time.time()
+	objective = ctf.vecnorm(L) + (ctf.vecnorm(U) + ctf.vecnorm(V) + ctf.vecnorm(W)) * regParam
+	t2 = time.time()
+	if glob_comm.rank() == 0:
+		print('generate L takes {}'.format(t1 - t0))
+		print('calc objective takes {}'.format(t2 - t1))
+	return objective
 
 def main():
 
@@ -23,18 +65,22 @@ def main():
 
 	r = 30
 
-	sparsity = .8
+	sparsity = .1
 	regParam = .1
 
 	ctf.random.seed(42)
 
-	# 3rd-order tensor
-	T = ctf.tensor((I,J,K),sp=True)
-	# T.read_from_file('tensor.txt')
-	T.fill_sp_random(0,1,sparsity)
-	assert(T.sp == 1)
+	# # 3rd-order tensor
+	# T = ctf.tensor((I,J,K))
+	# # T.read_from_file('tensor.txt')
+	# T.fill_sp_random(0,1,sparsity)
+	T = function_tensor(I,J,K,sparsity)
 
+	t0 = time.time()
 	omega = getOmega(T)
+	
+	if glob_comm.rank() == 0:
+		print('getOmega takes {}'.format(time.time() - t0))
 
 
 	U = ctf.random.random((I, r))
@@ -53,37 +99,54 @@ def main():
 	ite = 0
 	objectives = []
 
-	t0 = time.time()
+	t_before_loop = time.time()
 
 	while True:
 
+		t0 = time.time()
 		R = ctf.copy(T)
-		R -= ctf.einsum('ijk, ir, jr, kr -> ijk', omega, U, V, W)
-		R += ctf.einsum('ijk, i, j, k -> ijk', omega, U[:,0], V[:,0], W[:,0])
+		t1 = time.time()
+
+		ctf.einsum('ir, jr, kr, ijk -> ijk', U, V, W, omega, out=R, out_scale=-1)
 		
+		t2 = time.time()
+		ctf.einsum('ijk, i, j, k -> ijk', omega, U[:,0], V[:,0], W[:,0], out=R, out_scale=1)
+		t3 = time.time()
+
 		# print(R)
 		# exit(0)
 
+		t4 = time.time()
 		objective = get_objective(T,U,V,W,I,J,K,omega,regParam)
 		if glob_comm.rank() == 0:
+			print('ctf.copy() takes {}'.format(t1-t0))
+			print('ctf.einsum() takes {}'.format(t2 - t1))
+			print('ctf.einsum() takes {}'.format(t3 - t2))
+			print('get_objective takes {}'.format(time.time()-t4))
 			print('Objective: {}'.format(objective))
-		objectives.append(objective)
 
-		# exit(0)
+		objectives.append(objective)
 
 		for f in range(r):
 			
 			# update U[:,f]
 			if glob_comm.rank() == 0:
 				print('updating U[:,{}]'.format(f))
+
+			t0 = time.time()
 			alphas = ctf.einsum('ijk, j, k -> i', R, V[:,f], W[:,f])
+			t1 = time.time()
 			betas = ctf.einsum('ijk, j, j, k, k -> i', omega, V[:,f], V[:,f], W[:,f], W[:,f])
+			t2 = time.time()
 			
 			U[:,f] = alphas / (regParam + betas)
 
 			objective = get_objective(T,U,V,W,I,J,K,omega,regParam)
 			if glob_comm.rank() == 0:
 				print('Objective: {}'.format(objective))
+				print('ctf.einsum() takes {}'.format(t1-t0))
+				print('ctf.einsum() takes {}'.format(t2-t1))
+
 			objectives.append(objective)
 
 			# exit(0)
@@ -122,8 +185,8 @@ def main():
 
 
 			# t0 = time.time()
-			R -= ctf.einsum('ijk, i, j, k -> ijk', omega, U[:,f], V[:,f], W[:,f])
-			R += ctf.einsum('ijk, i, j, k -> ijk', omega, U[:,f+1], V[:,f+1], W[:,f+1])
+			ctf.einsum('ijk, i, j, k -> ijk', omega, U[:,f], V[:,f], W[:,f], out=R, out_scale=-1)
+			ctf.einsum('ijk, i, j, k -> ijk', omega, U[:,f+1], V[:,f+1], W[:,f+1], out=R, out_scale=1)
 			# print(time.time() - t0)
 
 			# print(R)
@@ -135,7 +198,7 @@ def main():
 			break
 
 	if glob_comm.rank() == 0:
-		print('Time: {}'.format(time.time() - t0))
+		print('Time/Iteration: {}'.format((time.time() - t_before_loop)/1)
 	# plt.plot(objectives)
 	# plt.yscale('log')
 	# plt.show()
