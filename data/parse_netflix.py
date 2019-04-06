@@ -1,5 +1,5 @@
-movie_count = 17770
-route = "../../Downloads/download/training_set/"
+movie_count = 17770 #set this to smaller number if tensor os too large
+route = "training_set/"
 
 uid_dict = {}
 uid_counter = 0
@@ -7,7 +7,7 @@ date_dict = {}
 date_counter = 0
 
 for i in range(1, movie_count+1):
-    if i % 1000 == 0:
+    if i % 100 == 0:
         print("indexing movie #" + str(i)) #print progress
 
     index = str(i)
@@ -36,7 +36,7 @@ for i in range(len(dates)):
 
 output = []
 for i in range(1, movie_count+1):
-    if i % 1000 == 0:
+    if i % 100 == 0:
         print("writing movie #" + str(i))
     index = str(i)
     for j in range(7 - len(index)):
