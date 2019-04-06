@@ -39,7 +39,7 @@ def function_tensor(I, J, K, sparsity):
 
 def getOmega(T):
     if not T.sp:
-        omegactf = ((T > 0)*ctf.astensor(1.))
+        omegactf = ((T != 0)*ctf.astensor(1.))
     else:
         omegactf = T / T
         assert(omegactf.sp)
@@ -60,9 +60,9 @@ def get_objective(T,U,V,W,I,J,K,omega,regParam):
 
 def main():
 
-	I = 100
-	J = 100
-	K = 100
+	I = 300
+	J = 300
+	K = 300
 
 	r = 30
 
@@ -108,10 +108,10 @@ def main():
 		R = ctf.copy(T)
 		t1 = time.time()
 
-		ctf.einsum('ir, jr, kr, ijk -> ijk', U, V, W, omega, out=R, out_scale=-1)
-		
+		R -= ctf.einsum('ijk, ir, jr, kr -> ijk', omega, U, V, W)
 		t2 = time.time()
-		ctf.einsum('ijk, i, j, k -> ijk', omega, U[:,0], V[:,0], W[:,0], out=R, out_scale=1)
+		R += ctf.einsum('ijk, i, j, k -> ijk', omega, U[:,0], V[:,0], W[:,0])
+		
 		t3 = time.time()
 
 		# print(R)
@@ -150,8 +150,6 @@ def main():
 
 			objectives.append(objective)
 
-			# exit(0)
-
 
 			# update V[:,f]
 			if glob_comm.rank() == 0:
@@ -186,8 +184,8 @@ def main():
 
 
 			# t0 = time.time()
-			ctf.einsum('ijk, i, j, k -> ijk', omega, U[:,f], V[:,f], W[:,f], out=R, out_scale=-1)
-			ctf.einsum('ijk, i, j, k -> ijk', omega, U[:,f+1], V[:,f+1], W[:,f+1], out=R, out_scale=1)
+			R -= ctf.einsum('ijk, i, j, k -> ijk', omega, U[:,f], V[:,f], W[:,f])
+			R += ctf.einsum('ijk, i, j, k -> ijk', omega, U[:,f+1], V[:,f+1], W[:,f+1])
 			# print(time.time() - t0)
 
 			# print(R)
@@ -199,14 +197,15 @@ def main():
 			break
 
 	if glob_comm.rank() == 0:
-		print('Time/Iteration: {}'.format((time.time() - t_before_loop)/1)
+		print('Time/Iteration: {}'.format((time.time() - t_before_loop)/1))
+
 	# plt.plot(objectives)
 	# plt.yscale('log')
 	# plt.show()
 	# print(len(objectives))
 
-
-main()
+if __name__ == '__main__':
+	main()
 
 
 # import ctf
