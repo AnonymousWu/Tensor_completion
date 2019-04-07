@@ -186,8 +186,10 @@ def main():
 
 
 			# t0 = time.time()
-			R -= ctf.einsum('ijk, i, j, k -> ijk', omega, U[:,f], V[:,f], W[:,f])
-			R += ctf.einsum('ijk, i, j, k -> ijk', omega, U[:,f+1], V[:,f+1], W[:,f+1])
+			# R -= ctf.einsum('ijk, i, j, k -> ijk', omega, U[:,f], V[:,f], W[:,f])
+			R -= ctf.TTTP(omega, [U[:,f], V[:,f], W[:,f]])
+			# R += ctf.einsum('ijk, i, j, k -> ijk', omega, U[:,f+1], V[:,f+1], W[:,f+1])
+			R += ctf.TTTP(omega, [U[:,f+1], V[:,f+1], W[:,f+1]])
 			# print(time.time() - t0)
 
 			# print(R)
