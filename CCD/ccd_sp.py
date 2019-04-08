@@ -11,8 +11,8 @@ def function_tensor(I, J, K, sparsity):
     # L = 100
     # nsample = 10*N*n*L #10nNL = 255000
 
-    T = ctf.tensor((I, J, K))
-    T2 = ctf.tensor((I, J, K))
+    T = ctf.tensor((I, J, K), sp=True)
+    T2 = ctf.tensor((I, J, K), sp=True)
 
     T.fill_sp_random(1, 1, sparsity)
     # T = ctf.exp(-1 * ctf.power(ctf.power(T,2),0.5))  # x = exp(-sqrt(x^2))
@@ -26,18 +26,20 @@ def function_tensor(I, J, K, sparsity):
         # v = np.arange(1,n+1)
         v = ctf.astensor(v ** 2)
 
-        v2 = ctf.tensor(n)
+        v2 = ctf.tensor(n, sp=True)
         v2 = v
         T2.i("ijk") << T.i("ijk") * v2.i(index[i])
 
+    print(1)
     T2 = ctf.power(T2, 0.5)
+    print(2)
     T2 = (-1.0) * T2
 
     # T2 = ctf.exp(T2)
 
     return T2
 
-def getOmega(T):
+def getOmegaOld(T):
     if not T.sp:
         omegactf = ((T != 0)*ctf.astensor(1.))
     else:
@@ -46,8 +48,15 @@ def getOmega(T):
     
     return omegactf
 
+def getOmega(T):
+    [inds, data] = T.read_local_nnz()
+    data[:] = 1.
+    Omega = ctf.tensor(T.shape,sp=True)
+    Omega.write(inds,data)
+    return Omega
+
 def get_objective(T,U,V,W,I,J,K,omega,regParam):
-	L = ctf.tensor((I,J,K))
+	L = ctf.tensor((I,J,K), sp=True)
 	t0 = time.time()
 	L.i("ijk") << T.i("ijk") - ctf.TTTP(omega, [U,V,W]).i("ijk")
 	t1 = time.time()
@@ -60,25 +69,35 @@ def get_objective(T,U,V,W,I,J,K,omega,regParam):
 
 def main():
 
-	I = 100
-	J = 100
-	K = 100
+	# I = 1000
+	# J = 1000
+	# K = 1000
 
-	r = 30
-
+	I = 150
+	J = 150
+	K = 150
 	sparsity = .1
+
+
+	r = 10
+
+	# sparsity = .001
 	regParam = .1
 
 	ctf.random.seed(42)
 
 	# # 3rd-order tensor
-	# T = ctf.tensor((I,J,K))
+	T = ctf.tensor((I,J,K), sp=True)
 	# # T.read_from_file('tensor.txt')
-	# T.fill_sp_random(0,1,sparsity)
-	T = function_tensor(I,J,K,sparsity)
+	T.fill_sp_random(0,1,sparsity)
+	# T = function_tensor(I,J,K,sparsity)
+	assert(T.sp)
 
 	t0 = time.time()
 	omega = getOmega(T)
+	assert(omega.sp)
+	print(T.sum(), omega.sum())
+
 	
 	if glob_comm.rank() == 0:
 		print('getOmega takes {}'.format(time.time() - t0))
@@ -106,29 +125,28 @@ def main():
 
 		t0 = time.time()
 		R = ctf.copy(T)
+		assert(R.sp)
 		t1 = time.time()
-
 		# R -= ctf.einsum('ijk, ir, jr, kr -> ijk', omega, U, V, W)
 		R -= ctf.TTTP(omega, [U,V,W])
+		assert(R.sp)
 		t2 = time.time()
 		# R += ctf.einsum('ijk, i, j, k -> ijk', omega, U[:,0], V[:,0], W[:,0])
 		R += ctf.TTTP(omega, [U[:,0], V[:,0], W[:,0]])
+		assert(R.sp)
 		t3 = time.time()
 
-		# print(R)
-		# exit(0)
-
-		t4 = time.time()
 		objective = get_objective(T,U,V,W,I,J,K,omega,regParam)
+
 		if glob_comm.rank() == 0:
 			print('ctf.copy() takes {}'.format(t1-t0))
-			print('ctf.TTTP() takes {}'.format(t2 - t1))
-			print('ctf.TTTP() takes {}'.format(t3 - t2))
-			print('get_objective takes {}'.format(time.time()-t4))
+			print('ctf.TTTP() takes {}'.format(t2-t1))
+			print('ctf.TTTP() takes {}'.format(t3-t2))
+			print('get_objective takes {}'.format(time.time()-t3))
 			print('Objective: {}'.format(objective))
 
-
 		objectives.append(objective)
+
 
 		for f in range(r):
 			
@@ -138,8 +156,13 @@ def main():
 
 			t0 = time.time()
 			alphas = ctf.einsum('ijk, j, k -> i', R, V[:,f], W[:,f])
+			
 			t1 = time.time()
+
 			betas = ctf.einsum('ijk, j, j, k, k -> i', omega, V[:,f], V[:,f], W[:,f], W[:,f])
+			# betas = ctf.tensor(I,)
+			# betas.i("i") << V[:,f].i("j")*W[:,f].i("k")*ctf.TTTP(omega, [None,V[:,f],W[:,f]]).i("ijk")
+			
 			t2 = time.time()
 			
 			U[:,f] = alphas / (regParam + betas)
@@ -158,6 +181,7 @@ def main():
 				print('updating V[:,{}]'.format(f))
 			alphas = ctf.einsum('ijk, i, k -> j', R, U[:,f], W[:,f])
 			betas = ctf.einsum('ijk, i, i, k, k -> j', omega, U[:,f], U[:,f], W[:,f], W[:,f])
+
 			
 			V[:,f] = alphas / (regParam + betas)
 
@@ -190,6 +214,7 @@ def main():
 			R -= ctf.TTTP(omega, [U[:,f], V[:,f], W[:,f]])
 			# R += ctf.einsum('ijk, i, j, k -> ijk', omega, U[:,f+1], V[:,f+1], W[:,f+1])
 			R += ctf.TTTP(omega, [U[:,f+1], V[:,f+1], W[:,f+1]])
+			assert(R.sp)
 			# print(time.time() - t0)
 
 			# print(R)
