@@ -439,7 +439,7 @@ def updateFactor_Kressner(T,U,V,W,regParam,omega,I,J,K,r,string):
             b.i("r") << V.i("Jr")*W.i("Kr") * sliced_T.i("JK")  # RHS; ATb
             assert(b.sp==1)    
             U[i,:].set_zero()            
-            U[i,:]= Kressner(A,b,U[i,:],r,regParam)    
+            U[i,:]= Kressner(A,b,U[i,:],r,regParam) 
 
         assert(U.sp==1)
         return U
@@ -457,7 +457,7 @@ def updateFactor_Kressner(T,U,V,W,regParam,omega,I,J,K,r,string):
             V[j,:].set_zero()
             V[j,:] = Kressner(A,b,V[j,:],r,regParam)
 
-        assert(V.sp==1)    
+        assert(V.sp==1)   
         return V  
 
     if (string=="W"):
@@ -608,7 +608,7 @@ def main():
     r = 2 
     sparsity = .000001
     regParam = .1
-    block = 10
+    block = 100
 
     # 3rd-order tensor
     T_SVD = ctf.tensor((I,J,K),sp=True)
