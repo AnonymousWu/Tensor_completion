@@ -59,6 +59,7 @@ def get_objective(T,U,V,W,I,J,K,omega,regParam):
 	L = ctf.tensor((I,J,K), sp=True)
 	t0 = time.time()
 	L.i("ijk") << T.i("ijk") - ctf.TTTP(omega, [U,V,W]).i("ijk")
+	assert(L.sp)
 	t1 = time.time()
 	objective = ctf.vecnorm(L) + (ctf.vecnorm(U) + ctf.vecnorm(V) + ctf.vecnorm(W)) * regParam
 	t2 = time.time()
@@ -73,9 +74,9 @@ def main():
 	# J = 1000
 	# K = 1000
 
-	I = 150
-	J = 150
-	K = 150
+	I = 800
+	J = 800
+	K = 800
 	sparsity = .1
 
 
