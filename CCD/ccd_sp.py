@@ -5,7 +5,7 @@ import time
 import sys
 glob_comm = ctf.comm()
 import numpy as np
-status_prints = False
+status_prints = True
 
 def function_tensor(I, J, K, sparsity):
     # N = 5
@@ -82,9 +82,6 @@ def main():
     # J = 1000
     # K = 1000
 
-    I = 100
-    J = 100
-    K = 100
     sparsity = .1
     r = 10
     num_iter = 1
@@ -96,7 +93,7 @@ def main():
         sparsity = np.float64(sys.argv[4])
     if len(sys.argv) >= 6:
         r = int(sys.argv[5])
-    if len(sys.argv) >= 6:
+    if len(sys.argv) >= 7:
         num_iter = int(sys.argv[6])
 
     if glob_comm.rank() == 0:
@@ -127,15 +124,18 @@ def main():
     U = ctf.random.random((I, r))
     V = ctf.random.random((J, r))
     W = ctf.random.random((K, r))
+    U_vec_list = []
+    V_vec_list = []
+    W_vec_list = []
+    for f in range(r):
+    	U_vec_list.append(U[:,f])
+    	V_vec_list.append(V[:,f])
+    	W_vec_list.append(W[:,f])
+
 
     # print(T)
     # T.write_to_file('tensor_out.txt')
     # assert(T.sp == 1)
-
-    # exit(0)
-    # print(U)
-    # print(V)
-    # print(W)
 
     ite = 0
     objectives = []
@@ -182,17 +182,21 @@ def main():
                 print('updating U[:,{}]'.format(f))
 
             t0 = time.time()
-            alphas = ctf.einsum('ijk, j, k -> i', R, V[:,f], W[:,f])
+            # alphas = ctf.einsum('ijk, j, k -> i', R, V[:,f], W[:,f])
+            alphas = ctf.einsum('ijk, j, k -> i', R, V_vec_list[f], W_vec_list[f])
             
             t1 = time.time()
 
-            betas = ctf.einsum('ijk, j, j, k, k -> i', omega, V[:,f], V[:,f], W[:,f], W[:,f])
+            # betas = ctf.einsum('ijk, j, j, k, k -> i', omega, V[:,f], V[:,f], W[:,f], W[:,f])
+            betas = ctf.einsum('ijk, j, j, k, k -> i', omega, V_vec_list[f], V_vec_list[f], W_vec_list[f], W_vec_list[f])
             # betas = ctf.tensor(I,)
             # betas.i("i") << V[:,f].i("j")*W[:,f].i("k")*ctf.TTTP(omega, [None,V[:,f],W[:,f]]).i("ijk")
             
             t2 = time.time()
             
-            U[:,f] = alphas / (regParam + betas)
+            # U[:,f] = alphas / (regParam + betas)
+            U_vec_list[f] = alphas / (regParam + betas)
+            U[:,f] = U_vec_list[f]
 
             objective = get_objective(T,U,V,W,I,J,K,omega,regParam)
             if glob_comm.rank() == 0 and status_prints == True:
@@ -206,27 +210,34 @@ def main():
             # update V[:,f]
             if glob_comm.rank() == 0 and status_prints == True:
                 print('updating V[:,{}]'.format(f))
-            alphas = ctf.einsum('ijk, i, k -> j', R, U[:,f], W[:,f])
-            betas = ctf.einsum('ijk, i, i, k, k -> j', omega, U[:,f], U[:,f], W[:,f], W[:,f])
+            # alphas = ctf.einsum('ijk, i, k -> j', R, U[:,f], W[:,f])
+            alphas = ctf.einsum('ijk, i, k -> j', R, U_vec_list[f], W_vec_list[f])
 
+            # betas = ctf.einsum('ijk, i, i, k, k -> j', omega, U[:,f], U[:,f], W[:,f], W[:,f])
+            betas = ctf.einsum('ijk, i, i, k, k -> j', omega, U_vec_list[f], U_vec_list[f], W_vec_list[f], W_vec_list[f])
             
-            V[:,f] = alphas / (regParam + betas)
+            # V[:,f] = alphas / (regParam + betas)
+            V_vec_list[f] = alphas / (regParam + betas)
+            V[:,f] = V_vec_list[f]
 
             objective = get_objective(T,U,V,W,I,J,K,omega,regParam)
             if glob_comm.rank() == 0 and status_prints == True:
                 print('Objective: {}'.format(objective))
             objectives.append(objective)
 
-            # exit(0)
-
 
             # update W[:,f]
             if glob_comm.rank() == 0 and status_prints == True:
                 print('updating W[:,{}]'.format(f))
-            alphas = ctf.einsum('ijk, i, j -> k', R, U[:,f], V[:,f])
-            betas = ctf.einsum('ijk, i, i, j, j -> k', omega, U[:,f], U[:,f], V[:,f], V[:,f])
+            # alphas = ctf.einsum('ijk, i, j -> k', R, U[:,f], V[:,f])
+            alphas = ctf.einsum('ijk, i, j -> k', R, U_vec_list[f], V_vec_list[f])
+
+            # betas = ctf.einsum('ijk, i, i, j, j -> k', omega, U[:,f], U[:,f], V[:,f], V[:,f])
+            betas = ctf.einsum('ijk, i, i, j, j -> k', omega, U_vec_list[f], U_vec_list[f], V_vec_list[f], V_vec_list[f])
             
-            W[:,f] = alphas / (regParam + betas)
+            # W[:,f] = alphas / (regParam + betas)
+            W_vec_list[f] = alphas / (regParam + betas)
+            W[:,f] = W_vec_list[f]
 
             objective = get_objective(T,U,V,W,I,J,K,omega,regParam)
             if glob_comm.rank() == 0 and status_prints == True:
@@ -240,9 +251,12 @@ def main():
             # R -= ctf.einsum('ijk, i, j, k -> ijk', omega, U[:,f], V[:,f], W[:,f])
             t_tttp = ctf.timer("ccd_TTTP")
             t_tttp.start()
-            R -= ctf.TTTP(omega, [U[:,f], V[:,f], W[:,f]])
+            # R -= ctf.TTTP(omega, [U[:,f], V[:,f], W[:,f]])
+            R -= ctf.TTTP(omega, [U_vec_list[f], V_vec_list[f], W_vec_list[f]])
+
             # R += ctf.einsum('ijk, i, j, k -> ijk', omega, U[:,f+1], V[:,f+1], W[:,f+1])
-            R += ctf.TTTP(omega, [U[:,f+1], V[:,f+1], W[:,f+1]])
+            # R += ctf.TTTP(omega, [U[:,f+1], V[:,f+1], W[:,f+1]])
+            R += ctf.TTTP(omega, [U_vec_list[f+1], V_vec_list[f+1], W_vec_list[f+1]])
             t_tttp.stop()
             assert(R.sp)
             # print(time.time() - t0)
@@ -255,10 +269,13 @@ def main():
 
         if ite == num_iter:
             break
+
     t_CCD.end()
+    objective = get_objective(T,U,V,W,I,J,K,omega,regParam)
 
     if glob_comm.rank() == 0:
         print('Time/Iteration: {}'.format((time.time() - t_before_loop)/1))
+        print('Objective: {}'.format(objective))
 
     # plt.plot(objectives)
     # plt.yscale('log')
