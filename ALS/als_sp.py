@@ -214,15 +214,17 @@ def solve(A,b,factor,r,regParam):
 
 def getALS_CG(T,U,V,W,regParam,omega,I,J,K,r,num_blocks,num_iter=100,err_thresh=.001,use_implicit=True):
 
-    if ctf.comm().rank() == 0:
-        print("--------------------------------ALS iterative CG------------------------")
 
     t_before_loop = time.time()
 
     if use_implicit == True:
         t_ALS_CG = ctf.timer_epoch("als_CG_implicit")
+        if ctf.comm().rank() == 0:
+            print("--------------------------------ALS with implicit CG------------------------")
     else:
         t_ALS_CG = ctf.timer_epoch("als_CG_explicit")
+        if ctf.comm().rank() == 0:
+            print("--------------------------------ALS with explicit CG------------------------")
     t_ALS_CG.begin()
  
     it = 0
