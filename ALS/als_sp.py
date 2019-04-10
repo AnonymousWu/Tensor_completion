@@ -112,7 +112,7 @@ def solve_SVD(A,b,factor,r,regParam):
     
     return factor   
 
-def updateFactor(T,U,V,W,regParam,omega,I,J,K,r,num_blocks,string,use_implicit):
+def updateFactor(T,U,V,W,regParam,omega,I,J,K,r,block_size,string,use_implicit):
 
     t_RHS = ctf.timer("ALS_imp_cg_RHS")
     t_cg_TTTP = ctf.timer("ALS_imp_cg_TTTP")
@@ -120,86 +120,94 @@ def updateFactor(T,U,V,W,regParam,omega,I,J,K,r,num_blocks,string,use_implicit):
     t_form_EQs = ctf.timer("ALS_exp_form_EQs")
     t_form_RHS = ctf.timer("ALS_exp_form_RHS")
     if (string=="U"):
-
-        block_size = int(I/num_blocks)
+        num_blocks = int((I+block_size-1)/block_size)
         for n in range(num_blocks):
+            I_start = n*block_size
+            I_end = min(I,I_start+block_size)
+            bsize = I_end-I_start
             t_o_slice.start()
-            nomega = omega[n*block_size : (n+1)*block_size,:,:]
+            nomega = omega[I_start : I_end,:,:]
             t_o_slice.stop()
             assert(nomega.sp == sparse_format)
-            x0 = ctf.random.random((block_size,r))
-            b = ctf.tensor((block_size,r))
+            x0 = ctf.random.random((bsize,r))
+            b = ctf.tensor((bsize,r))
             t_RHS.start()
-            b.i("ir") << V.i("Jr")*W.i("Kr")*T[n*block_size : (n+1)*block_size,:,:].i("iJK")  # RHS; ATb
+            b.i("ir") << V.i("Jr")*W.i("Kr")*T[I_start : I_end,:,:].i("iJK")  # RHS; ATb
             t_RHS.stop()
         
             if use_implicit:
-                Ax0 = ctf.tensor((block_size,r))
+                Ax0 = ctf.tensor((bsize,r))
                 t_cg_TTTP.start()
                 Ax0.i("ir") << V.i("Jr")*W.i("Kr")*ctf.TTTP(nomega, [x0,V,W]).i("iJK")
                 t_cg_TTTP.stop()
                 Ax0 += regParam*x0 
-                U[n*block_size : (n+1)*block_size,:] = CG(implicit_ATA(V,W,nomega,"U"),b,x0,r,regParam,block_size,True)
+                U[I_start : I_end,:] = CG(implicit_ATA(V,W,nomega,"U"),b,x0,r,regParam,bsize,True)
             else:
-                A = ctf.tensor((block_size,r,r))
+                A = ctf.tensor((bsize,r,r))
                 t_form_EQs.start()
                 A.i("iuv") << V.i("Ju")*W.i("Ku") * nomega.i("iJK")*V.i("Jv")*W.i("Kv")
                 t_form_EQs.stop()
-                U[n*block_size : (n+1)*block_size,:] = CG(A,b,x0,r,regParam,block_size)
+                U[I_start : I_end,:] = CG(A,b,x0,r,regParam,bsize)
          
         return U
 
     if (string=="V"):
-        block_size = int(J/num_blocks)
-        for n in range(num_blocks): 
+        num_blocks = int((J+block_size-1)/block_size)
+        for n in range(num_blocks):
+            J_start = n*block_size
+            J_end = min(J,J_start+block_size)
+            bsize = J_end-J_start
             t_o_slice.start()
-            nomega = omega[:,n*block_size : (n+1)*block_size,:]
+            nomega = omega[:,J_start : J_end,:]
             t_o_slice.stop()
-            x0 = ctf.random.random((block_size,r))
-            b = ctf.tensor((block_size,r))
+            x0 = ctf.random.random((bsize,r))
+            b = ctf.tensor((bsize,r))
             t_RHS.start()
-            b.i("jr") << U.i("Ir")*W.i("Kr")*T[:,n*block_size : (n+1)*block_size,:].i("IjK")  # RHS; ATb
+            b.i("jr") << U.i("Ir")*W.i("Kr")*T[:,J_start : J_end,:].i("IjK")  # RHS; ATb
             t_RHS.stop()
             if use_implicit:
-                Ax0 = ctf.tensor((block_size,r))
+                Ax0 = ctf.tensor((bsize,r))
                 t_cg_TTTP.start()
                 Ax0.i("jr") << U.i("Ir")*W.i("Kr")*ctf.TTTP(nomega, [U,x0,W]).i("IjK")
                 t_cg_TTTP.stop()
                 Ax0 += regParam*x0
-                V[n*block_size : (n+1)*block_size,:] = CG(implicit_ATA(U,W,nomega,"V"),b,x0,r,regParam,block_size,True)
+                V[J_start : J_end,:] = CG(implicit_ATA(U,W,nomega,"V"),b,x0,r,regParam,bsize,True)
             else:
-                A = ctf.tensor((block_size,r,r))
+                A = ctf.tensor((bsize,r,r))
                 t_form_EQs.start()
                 A.i("juv") << U.i("Iu")*W.i("Ku") * nomega.i("IjK") * U.i("Iv")*W.i("Kv") 
                 t_form_EQs.stop()
-                V[n*block_size : (n+1)*block_size,:] = CG(A,b,x0,r,regParam,block_size)
+                V[J_start : J_end,:] = CG(A,b,x0,r,regParam,bsize)
 
         return V  
 
     if (string=="W"):
-        block_size = int(K/num_blocks)
-        for n in range(num_blocks): 
+        num_blocks = int((K+block_size-1)/block_size)
+        for n in range(num_blocks):
+            K_start = n*block_size
+            K_end = min(K,K_start+block_size)
+            bsize = K_end-K_start
             t_o_slice.start()
-            nomega = omega[:,:,n*block_size : (n+1)*block_size]
+            nomega = omega[:,:,K_start : K_end]
             t_o_slice.stop()
-            x0 = ctf.random.random((block_size,r))
-            b = ctf.tensor((block_size,r))
+            x0 = ctf.random.random((bsize,r))
+            b = ctf.tensor((bsize,r))
             t_RHS.start()
-            b.i("kr") << U.i("Ir")*V.i("Jr")* T[:,:,n*block_size : (n+1)*block_size].i("IJk")  # RHS; ATb
+            b.i("kr") << U.i("Ir")*V.i("Jr")* T[:,:,K_start : K_end].i("IJk")  # RHS; ATb
             t_RHS.stop()
             if use_implicit:
-                Ax0 = ctf.tensor((block_size,r))
+                Ax0 = ctf.tensor((bsize,r))
                 t_cg_TTTP.start()
                 Ax0.i("kr") << U.i("Ir")*V.i("Jr")*ctf.TTTP(nomega, [U,V,x0]).i("IJk")
                 t_cg_TTTP.stop()
                 Ax0 += regParam*x0 
-                W[n*block_size : (n+1)*block_size,:] = CG(implicit_ATA(U,V,nomega,"W"),b,x0,r,regParam,block_size,True)
+                W[K_start : K_end,:] = CG(implicit_ATA(U,V,nomega,"W"),b,x0,r,regParam,bsize,True)
             else:
-                A = ctf.tensor((block_size,r,r))
+                A = ctf.tensor((bsize,r,r))
                 t_form_EQs.start()
                 A.i("kuv") << U.i("Iu")*V.i("Ju")*nomega.i("IJk")*U.i("Iv")*V.i("Jv")  # LHS; ATA using matrix-vector multiplication
                 t_form_EQs.stop()
-                W[n*block_size : (n+1)*block_size,:] = CG(A,b,x0,r,regParam,block_size)
+                W[K_start : K_end,:] = CG(A,b,x0,r,regParam,bsize)
 
         return W
 
@@ -212,7 +220,7 @@ def solve(A,b,factor,r,regParam):
     return factor   
 
 
-def getALS_CG(T,U,V,W,regParam,omega,I,J,K,r,num_blocks,num_iter=100,err_thresh=.001,use_implicit=True):
+def getALS_CG(T,U,V,W,regParam,omega,I,J,K,r,block_size,num_iter=100,err_thresh=.001,use_implicit=True):
 
 
     t_before_loop = time.time()
@@ -251,9 +259,9 @@ def getALS_CG(T,U,V,W,regParam,omega,I,J,K,r,num_blocks,num_iter=100,err_thresh=
         t_upd_cg = ctf.timer("ALS_upd_cg")
         t_upd_cg.start()
         
-        U = updateFactor(T,U,V,W,regParam,omega,I,J,K,r,num_blocks,"U",use_implicit)
-        V = updateFactor(T,U,V,W,regParam,omega,I,J,K,r,num_blocks,"V",use_implicit) 
-        W = updateFactor(T,U,V,W,regParam,omega,I,J,K,r,num_blocks,"W",use_implicit)
+        U = updateFactor(T,U,V,W,regParam,omega,I,J,K,r,block_size,"U",use_implicit)
+        V = updateFactor(T,U,V,W,regParam,omega,I,J,K,r,block_size,"V",use_implicit) 
+        W = updateFactor(T,U,V,W,regParam,omega,I,J,K,r,block_size,"W",use_implicit)
         
         E.set_zero()
         #E.i("ijk") << T.i("ijk") - omega.i("ijk")*U.i("iu")*V.i("ju")*W.i("ku")
@@ -305,7 +313,7 @@ def main():
     r = 2 
     sparsity = .000001
     regParam = .1
-    num_blocks = 100
+    block_size = 100
     num_iter = 20
     err_thresh = .001
     run_implicit = 1
@@ -319,7 +327,7 @@ def main():
     if len(sys.argv) >= 6:
         r = int(sys.argv[5])
     if len(sys.argv) >= 7:
-        num_blocks = int(sys.argv[6])
+        block_size = int(sys.argv[6])
     if len(sys.argv) >= 8:
         num_iter = int(sys.argv[7])
     if len(sys.argv) >= 9:
@@ -332,7 +340,7 @@ def main():
         run_explicit= int(sys.argv[11])
 
     if glob_comm.rank() == 0:
-        print("I is",I,"J is",J,"K is",K,"sparisty is",sparsity,"r is",r,"num_blocks size is",num_blocks,"num_iter is",num_iter,"err_thresh is",err_thresh,"regParam is",regParam,"run_implicit",run_implicit,"run_explicit is",run_explicit)
+        print("I is",I,"J is",J,"K is",K,"sparisty is",sparsity,"r is",r,"block_size is",block_size,"num_iter is",num_iter,"err_thresh is",err_thresh,"regParam is",regParam,"run_implicit",run_implicit,"run_explicit is",run_explicit)
 
 
     # 3rd-order tensor
@@ -359,9 +367,9 @@ def main():
     T_CG = ctf.copy(T_SVD)
 
     if run_implicit == True:
-        getALS_CG(T_CG,U_CG,V_CG,W_CG,regParam,omega,I,J,K,r,num_blocks,num_iter,err_thresh,True) 
+        getALS_CG(T_CG,U_CG,V_CG,W_CG,regParam,omega,I,J,K,r,block_size,num_iter,err_thresh,True) 
     if run_explicit == True:
-        getALS_CG(T_SVD,U_SVD,V_SVD,W_SVD,regParam,omega,I,J,K,r,num_blocks,num_iter,err_thresh,False)
+        getALS_CG(T_SVD,U_SVD,V_SVD,W_SVD,regParam,omega,I,J,K,r,block_size,num_iter,err_thresh,False)
 
 
 
