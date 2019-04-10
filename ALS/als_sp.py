@@ -112,8 +112,8 @@ def updateFactor_CG(T,U,V,W,regParam,omega,I,J,K,r,block,string):
             x0 = ctf.random.random((size,r))
             Ax0 = ctf.tensor((size,r))
             t_cg_TTTP.start()
-            Ax0.i("ir") << V.i("Jr")*W.i("Kr")*nomega.i("iJK")*V.i("JR")*W.i("KR")*x0.i("iR")  # LHS; ATA using matrix-vector multiplication
-            #Ax0.i("ir") << V.i("Jr")*W.i("Kr")*ctf.TTTP(nomega, [x0,V,W]).i("iJK")
+            #Ax0.i("ir") << V.i("Jr")*W.i("Kr")*nomega.i("iJK")*V.i("JR")*W.i("KR")*x0.i("iR")  # LHS; ATA using matrix-vector multiplication
+            Ax0.i("ir") << V.i("Jr")*W.i("Kr")*ctf.TTTP(nomega, [x0,V,W]).i("iJK")
             t_cg_TTTP.stop()
             Ax0 += regParam*x0 
             t2 = time.time()
@@ -143,8 +143,8 @@ def updateFactor_CG(T,U,V,W,regParam,omega,I,J,K,r,block,string):
             x0 = ctf.random.random((size,r))
             Ax0 = ctf.tensor((size,r))
             t_cg_TTTP.start()
-            Ax0.i("jr") << U.i("Ir")*W.i("Kr")*nomega.i("IjK")*U.i("IR")*W.i("KR")*x0.i("jR")  # LHS; ATA using matrix-vector multiplication
-            #Ax0.i("jr") << U.i("Ir")*W.i("Kr")*ctf.TTTP(nomega, [U,x0,W]).i("IjK")
+            #Ax0.i("jr") << U.i("Ir")*W.i("Kr")*nomega.i("IjK")*U.i("IR")*W.i("KR")*x0.i("jR")  # LHS; ATA using matrix-vector multiplication
+            Ax0.i("jr") << U.i("Ir")*W.i("Kr")*ctf.TTTP(nomega, [U,x0,W]).i("IjK")
             t_cg_TTTP.stop()
             Ax0 += regParam*x0 
             b = ctf.tensor((size,r))
@@ -166,8 +166,8 @@ def updateFactor_CG(T,U,V,W,regParam,omega,I,J,K,r,block,string):
             x0 = ctf.random.random((size,r))
             Ax0 = ctf.tensor((size,r))
             t_cg_TTTP.start()
-            Ax0.i("kr") << U.i("Ir")*V.i("Jr")*nomega.i("IJk")*U.i("IR")*V.i("JR")*x0.i("kR")  # LHS; ATA using matrix-vector multiplication
-            #Ax0.i("kr") << U.i("Ir")*V.i("Jr")*ctf.TTTP(nomega, [U,V,x0]).i("IJk")
+            #Ax0.i("kr") << U.i("Ir")*V.i("Jr")*nomega.i("IJk")*U.i("IR")*V.i("JR")*x0.i("kR")  # LHS; ATA using matrix-vector multiplication
+            Ax0.i("kr") << U.i("Ir")*V.i("Jr")*ctf.TTTP(nomega, [U,V,x0]).i("IJk")
             t_cg_TTTP.stop()
             Ax0 += regParam*x0 
             b = ctf.tensor((size,r))
@@ -255,6 +255,9 @@ def updateFactor_Kressner(T,U,V,W,regParam,omega,I,J,K,r,string):
 
 def getALS_CG(T,U,V,W,regParam,omega,I,J,K,r,block,num_iter=100,err_thresh=.001):
 
+    if ctf.comm().rank() == 0:
+        print("--------------------------------ALS iterative CG------------------------")
+
     t_before_loop = time.time()
 
     t_ALS_CG = ctf.timer_epoch("als_CG")
@@ -274,7 +277,7 @@ def getALS_CG(T,U,V,W,regParam,omega,I,J,K,r,block,num_iter=100,err_thresh=.001)
     t2= time.time()
 
     t_init_error_norm.stop()
-    if ctf.comm().rank() == 0:
+    if ctf.comm().rank() == 0 and status_prints == True:
             print('ctf.TTTP() takes {}'.format(t1-t0))
             print('ctf.vecnorm {}'.format(t2-t1))
     
@@ -309,15 +312,18 @@ def getALS_CG(T,U,V,W,regParam,omega,I,J,K,r,block,num_iter=100,err_thresh=.001)
     
     if glob_comm.rank() == 0:
         print('Time/Iteration: {}'.format((time.time() - t_before_loop)/1))
+        print("Number of iterations: %d" % (it))
     
-    return it
 
 
 def getALS_Kressner(T,U,V,W,regParam,omega,I,J,K,r,num_iter=100,err_thresh=.001):
+
+    if ctf.comm().rank() == 0:
+        print("--------------------------------ALS direct SVD------------------------")
     t_ALS_Kressner = ctf.timer_epoch("als_Kressner")
     t_ALS_Kressner.begin()
 
-    t0 = time.time()
+    t_before_loop = time.time()
     it = 0
     E = ctf.tensor((I,J,K),sp=sparse_format)
     #E.i("ijk") << T.i("ijk") - omega.i("ijk")*U.i("iu")*V.i("ju")*W.i("ku")
@@ -348,10 +354,11 @@ def getALS_Kressner(T,U,V,W,regParam,omega,I,J,K,r,num_iter=100,err_thresh=.001)
         curr_err_norm = next_err_norm
        
     t_ALS_Kressner.end()
+    if glob_comm.rank() == 0:
+        print('Time/Iteration: {}'.format((time.time() - t_before_loop)/1))
+        print("Number of iterations: %d" % (it))
 
-    nt = np.round_(time.time()- t0,4)
-    
-    return it, nt
+
 
 def getOmega_old(T,I,J,K):
     if (T.sp==False):
@@ -425,20 +432,9 @@ def main():
     T_CG = ctf.copy(T_SVD)
 
 
-    if ctf.comm().rank() == 0:
-        print("--------------------------------ALS iterative CG------------------------")
-    blockCGit = getALS_CG(T_CG,U_CG,V_CG,W_CG,regParam,omega,I,J,K,r,block,num_iter,err_thresh)
-    if ctf.comm().rank() == 0:
-        print("Number of iterations: %d" % (blockCGit))
-        print("CG block size: %d " % (block))   
-        #print("ALS iterative CG costs time: %f" %(blockCGtime))  
+    getALS_CG(T_CG,U_CG,V_CG,W_CG,regParam,omega,I,J,K,r,block,num_iter,err_thresh) 
+    getALS_Kressner(T_SVD,U_SVD,V_SVD,W_SVD,regParam,omega,I,J,K,r,num_iter,err_thresh)
 
-    if ctf.comm().rank() == 0:
-        print("--------------------------------ALS direct SVD------------------------")
-    kressnerit,kressnertime = getALS_Kressner(T_SVD,U_SVD,V_SVD,W_SVD,regParam,omega,I,J,K,r,num_iter,err_thresh)
-    if ctf.comm().rank() == 0:
-        print("Number of iterations: %d" % (kressnerit))
-        print("ALS direct CG costs time: %f" %(kressnertime))   
 
 
 main()
