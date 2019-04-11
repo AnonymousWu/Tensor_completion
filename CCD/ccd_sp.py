@@ -256,7 +256,8 @@ def main():
 
             # R += ctf.einsum('ijk, i, j, k -> ijk', omega, U[:,f+1], V[:,f+1], W[:,f+1])
             # R += ctf.TTTP(omega, [U[:,f+1], V[:,f+1], W[:,f+1]])
-            R += ctf.TTTP(omega, [U_vec_list[f+1], V_vec_list[f+1], W_vec_list[f+1]])
+            if f+1 < r:
+                R += ctf.TTTP(omega, [U_vec_list[f+1], V_vec_list[f+1], W_vec_list[f+1]])
             t_tttp.stop()
             assert(R.sp)
             # print(time.time() - t0)
