@@ -1,6 +1,5 @@
 import ctf, time, random
 import numpy as np
-import matplotlib.pyplot as plt
 from functools import reduce
 import numpy.linalg as la
 from ctf import random as crandom
@@ -397,13 +396,13 @@ def getOmega(T):
 
 
 def main():
-    s = 800
-    sparsity = 100
+    s = 10
+    sparsity = 10
     r = 5
     regParam = 0.00001
     stepSize = 0.01
     sample_rate = 0.05
-
+    w = ctf.comm()
     I = s
     J = s
     K = s
@@ -411,8 +410,10 @@ def main():
     T.fill_sp_random(0., 1., 1. / sparsity)
     # T.read_from_file("T.txt")
     Omega = getOmega(T)
+    s1 = T.sum()
+    s2 = Omega.sum()
     if ctf.comm().rank() == 0:
-        print(T.sum(), Omega.sum())
+        print(s1,s2)
     #T = function_tensor(I, J, K, sparsity)
     U = ctf.random.random((I, r))
     V = ctf.random.random((J, r))
