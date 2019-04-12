@@ -93,6 +93,8 @@ def main():
         r = int(sys.argv[5])
     if len(sys.argv) >= 7:
         num_iter = int(sys.argv[6])
+    if len(sys.argv) >= 8:
+    	objective_frequency = int(sys.argv[7])
 
     if glob_comm.rank() == 0:
         print("I is",I,"J is",J,"K is",K,"sparisty is",sparsity,"r is",r,"num_iter is",num_iter)
@@ -242,7 +244,7 @@ def main():
             # R += ctf.TTTP(omega, [U[:,f+1], V[:,f+1], W[:,f+1]])
             if f+1 < r:
             	R += ctf.TTTP(omega, [U_vec_list[f+1], V_vec_list[f+1], W_vec_list[f+1]])
-            	
+
             t_tttp.stop()
             assert(R.sp)
             # print(time.time() - t0)
