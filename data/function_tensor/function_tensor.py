@@ -1,7 +1,6 @@
 import ctf,time,random
 import numpy as np
 import numpy.linalg as la
-import matplotlib.pyplot as plt
 from ctf import random as crandom
 glob_comm = ctf.comm()
 
