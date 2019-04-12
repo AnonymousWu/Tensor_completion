@@ -78,13 +78,11 @@ def get_objective(T,U,V,W,I,J,K,omega,regParam):
 
 def main():
 
-    # I = 1000
-    # J = 1000
-    # K = 1000
-
     sparsity = .1
     r = 10
     num_iter = 1
+    objective_frequency = 2
+
     if len(sys.argv) >= 4:
         I = int(sys.argv[1])
         J = int(sys.argv[2])
@@ -163,16 +161,17 @@ def main():
 
         t_iR_upd.stop()
 
-        objective = get_objective(T,U,V,W,I,J,K,omega,regParam)
+        if status_prints == True and ite % objective_frequency == 0:
+        	objective = get_objective(T,U,V,W,I,J,K,omega,regParam)
+        	objectives.append(objective)
+        	if glob_comm.rank() == 0:
+        			print('Objective: {}'.format(objective))
 
-        if glob_comm.rank() == 0:
+
+        if glob_comm.rank() == 0 and status_prints == True:
             print('ctf.copy() takes {}'.format(t1-t0))
             print('ctf.TTTP() takes {}'.format(t2-t1))
             print('ctf.TTTP() takes {}'.format(t3-t2))
-            print('get_objective takes {}'.format(time.time()-t3))
-            print('Objective: {}'.format(objective))
-
-        objectives.append(objective)
 
 
         for f in range(r):
@@ -198,13 +197,9 @@ def main():
             U_vec_list[f] = alphas / (regParam + betas)
             U[:,f] = U_vec_list[f]
 
-            objective = get_objective(T,U,V,W,I,J,K,omega,regParam)
             if glob_comm.rank() == 0 and status_prints == True:
-                print('Objective: {}'.format(objective))
                 print('ctf.einsum() takes {}'.format(t1-t0))
                 print('ctf.einsum() takes {}'.format(t2-t1))
-
-            objectives.append(objective)
 
 
             # update V[:,f]
@@ -220,11 +215,6 @@ def main():
             V_vec_list[f] = alphas / (regParam + betas)
             V[:,f] = V_vec_list[f]
 
-            objective = get_objective(T,U,V,W,I,J,K,omega,regParam)
-            if glob_comm.rank() == 0 and status_prints == True:
-                print('Objective: {}'.format(objective))
-            objectives.append(objective)
-
 
             # update W[:,f]
             if glob_comm.rank() == 0 and status_prints == True:
@@ -239,12 +229,6 @@ def main():
             W_vec_list[f] = alphas / (regParam + betas)
             W[:,f] = W_vec_list[f]
 
-            objective = get_objective(T,U,V,W,I,J,K,omega,regParam)
-            if glob_comm.rank() == 0 and status_prints == True:
-                print('Objective: {}'.format(objective))
-            objectives.append(objective)
-
-            # exit(0)
 
 
             # t0 = time.time()
@@ -256,7 +240,8 @@ def main():
 
             # R += ctf.einsum('ijk, i, j, k -> ijk', omega, U[:,f+1], V[:,f+1], W[:,f+1])
             # R += ctf.TTTP(omega, [U[:,f+1], V[:,f+1], W[:,f+1]])
-            R += ctf.TTTP(omega, [U_vec_list[f+1], V_vec_list[f+1], W_vec_list[f+1]])
+            if f+1 < r:
+            	R += ctf.TTTP(omega, [U_vec_list[f+1], V_vec_list[f+1], W_vec_list[f+1]])
             t_tttp.stop()
             assert(R.sp)
             # print(time.time() - t0)
@@ -274,7 +259,7 @@ def main():
     objective = get_objective(T,U,V,W,I,J,K,omega,regParam)
 
     if glob_comm.rank() == 0:
-        print('Time/Iteration: {}'.format((time.time() - t_before_loop)/1))
+        print('Time/Iteration: {}'.format((time.time() - t_before_loop)/num_iter))
         print('Objective: {}'.format(objective))
 
     # plt.plot(objectives)
