@@ -6,7 +6,7 @@ import sys
 glob_comm = ctf.comm()
 import numpy as np
 status_prints = True
-use_function_tensor = False
+use_function_tensor = True
 
 def function_tensor(I, J, K, sparsity):
     # N = 5
@@ -82,7 +82,7 @@ def main():
     sparsity = .1
     r = 10
     num_iter = 1
-    objective_frequency = 2
+    objective_frequency = 1
 
     if len(sys.argv) >= 4:
         I = int(sys.argv[1])
@@ -95,7 +95,7 @@ def main():
     if len(sys.argv) >= 7:
         num_iter = int(sys.argv[6])
     if len(sys.argv) >= 8:
-    	objective_frequency = int(sys.argv[7])
+       objective_frequency = int(sys.argv[7])
 
     if glob_comm.rank() == 0:
         print("I is",I,"J is",J,"K is",K,"sparisty is",sparsity,"r is",r,"num_iter is",num_iter)
@@ -107,10 +107,10 @@ def main():
 
     # # 3rd-order tensor
     if not use_function_tensor:
-    	T = ctf.tensor((I,J,K), sp=True)
-    	T.fill_sp_random(0,1,sparsity)
+       T = ctf.tensor((I,J,K), sp=True)
+       T.fill_sp_random(0,1,sparsity)
     else:
-    	T = function_tensor(I,J,K,sparsity)
+       T = function_tensor(I,J,K,sparsity)
     assert(T.sp)
 
     t0 = time.time()
@@ -130,9 +130,9 @@ def main():
     V_vec_list = []
     W_vec_list = []
     for f in range(r):
-    	U_vec_list.append(U[:,f])
-    	V_vec_list.append(V[:,f])
-    	W_vec_list.append(W[:,f])
+       U_vec_list.append(U[:,f])
+       V_vec_list.append(V[:,f])
+       W_vec_list.append(W[:,f])
 
 
     # print(T)
@@ -141,6 +141,7 @@ def main():
 
     ite = 0
     objectives = []
+    times = []
 
     t_before_loop = time.time()
 
@@ -166,10 +167,11 @@ def main():
         t_iR_upd.stop()
 
         if status_prints == True and ite % objective_frequency == 0:
-        	objective = get_objective(T,U,V,W,I,J,K,omega,regParam)
-        	objectives.append(objective)
-        	if glob_comm.rank() == 0:
-        			print('Objective: {}'.format(objective))
+            objective = get_objective(T,U,V,W,I,J,K,omega,regParam)
+            objectives.append(objective)
+            times.append(time.time() - t_before_loop)
+            if glob_comm.rank() == 0:
+                print('Objective: {}'.format(objective))
 
 
         if glob_comm.rank() == 0 and status_prints == True:
@@ -245,7 +247,7 @@ def main():
             # R += ctf.einsum('ijk, i, j, k -> ijk', omega, U[:,f+1], V[:,f+1], W[:,f+1])
             # R += ctf.TTTP(omega, [U[:,f+1], V[:,f+1], W[:,f+1]])
             if f+1 < r:
-            	R += ctf.TTTP(omega, [U_vec_list[f+1], V_vec_list[f+1], W_vec_list[f+1]])
+               R += ctf.TTTP(omega, [U_vec_list[f+1], V_vec_list[f+1], W_vec_list[f+1]])
 
             t_tttp.stop()
             assert(R.sp)
@@ -260,12 +262,17 @@ def main():
         if ite == num_iter:
             break
 
+        if len(objectives) > 2 and (objectives[ite-2] - objectives[ite-1]) / objectives[ite-2] < 1e-5:
+            break
+
     t_CCD.end()
     objective = get_objective(T,U,V,W,I,J,K,omega,regParam)
 
     if glob_comm.rank() == 0:
-        print('Time/Iteration: {}'.format((time.time() - t_before_loop)/num_iter))
+        print('Time/Iteration: {}'.format((time.time() - t_before_loop)/ite))
         print('Objective: {}'.format(objective))
+        print(objectives)
+        print(times)
 
     # plt.plot(objectives)
     # plt.yscale('log')
