@@ -13,8 +13,43 @@ import sys
 from math import sqrt
 
 status_prints = False
-CG_thresh = 1.e-10
+CG_thresh = 1.e-4
 sparse_format = True
+
+
+def function_tensor(I, J, K, sparsity):
+    # N = 5
+    # n = 51
+    # L = 100
+    # nsample = 10*N*n*L #10nNL = 255000
+
+    T = ctf.tensor((I, J, K), sp=True)
+    T2 = ctf.tensor((I, J, K), sp=True)
+
+    T.fill_sp_random(1, 1, sparsity)
+    # T = ctf.exp(-1 * ctf.power(ctf.power(T,2),0.5))  # x = exp(-sqrt(x^2))
+
+    sizes = [I, J, K]
+    index = ["i", "j", "k"]
+
+    for i in range(3):
+        n = sizes[i]
+        v = np.linspace(-1, 1, n)
+        # v = np.arange(1,n+1)
+        v = ctf.astensor(v ** 2)
+
+        v2 = ctf.tensor(n, sp=True)
+        v2 = v
+        T2.i("ijk") << T.i("ijk") * v2.i(index[i])
+
+    # T2 = ctf.power(T2, 0.5)
+    [inds, data] = T2.read_local_nnz()
+    data[:] **= .5
+    data[:] *= -1.
+    T2 = ctf.tensor(T2.shape,sp=True)
+    T2.write(inds,data)
+    
+    return T2
 
 class implicit_ATA:
     def __init__(self, f1, f2, omega, string):
@@ -272,7 +307,8 @@ def getALS_CG(T,U,V,W,regParam,omega,I,J,K,r,block_size,num_iter=100,err_thresh=
 
         if ctf.comm().rank() == 0:
             print("Last residual:",curr_err_norm,"New residual",next_err_norm)
-            it += 1
+        
+        it += 1
         
         if abs(curr_err_norm - next_err_norm) < err_thresh or it > num_iter:
             break
@@ -313,10 +349,12 @@ def main():
     sparsity = .000001
     regParam = .1
     block_size = 100
+    use_func = 0
     num_iter = 20
     err_thresh = .001
     run_implicit = 1
     run_explicit = 1
+
     if len(sys.argv) >= 4:
         I = int(sys.argv[1])
         J = int(sys.argv[2])
@@ -328,24 +366,30 @@ def main():
     if len(sys.argv) >= 7:
         block_size = int(sys.argv[6])
     if len(sys.argv) >= 8:
-        num_iter = int(sys.argv[7])
+        use_func= int(sys.argv[7])
     if len(sys.argv) >= 9:
-        err_thresh = np.float64(sys.argv[8])
+        num_iter = int(sys.argv[8])
     if len(sys.argv) >= 10:
-        regParam= np.float64(sys.argv[9])
+        err_thresh = np.float64(sys.argv[9])
     if len(sys.argv) >= 11:
-        run_implicit= int(sys.argv[10])
+        regParam= np.float64(sys.argv[10])
     if len(sys.argv) >= 12:
-        run_explicit= int(sys.argv[11])
+        run_implicit= int(sys.argv[11])
+    if len(sys.argv) >= 13:
+        run_explicit= int(sys.argv[12])
+        
 
     if glob_comm.rank() == 0:
-        print("I is",I,"J is",J,"K is",K,"sparisty is",sparsity,"r is",r,"block_size is",block_size,"num_iter is",num_iter,"err_thresh is",err_thresh,"regParam is",regParam,"run_implicit",run_implicit,"run_explicit is",run_explicit)
+        print("I is",I,"J is",J,"K is",K,"sparisty is",sparsity,"r is",r,"block_size is",block_size, "use_func is",use_func,"num_iter is",num_iter,"err_thresh is",err_thresh,"regParam is",regParam,"run_implicit",run_implicit,"run_explicit is",run_explicit)
 
 
     # 3rd-order tensor
-    T_SVD = ctf.tensor((I,J,K),sp=sparse_format)
-    T_SVD.fill_sp_random(0,1,sparsity)
-    #T_SVD = function_tensor(I,J,K,sparsity)
+    if use_func==1:
+        T_SVD = function_tensor(I,J,K,sparsity)
+    else:
+        T_SVD = ctf.tensor((I,J,K),sp=sparse_format)
+        T_SVD.fill_sp_random(0,1,sparsity)
+    
     assert(T_SVD.sp == sparse_format)
  
     #omega = updateOmega(T_SVD,I,J,K)
