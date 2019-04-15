@@ -7,7 +7,7 @@ import numpy.linalg as la
 from ctf import random as crandom
 glob_comm = ctf.comm()
 #from scipy.sparse.linalg import lsqr as lsqr
-#import sys
+import sys
 #sys.path.append('../data/function_tensor')
 #from function_tensor import *
 from math import sqrt
@@ -378,9 +378,9 @@ def main():
 
 
     # 3rd-order tensor
-    T_SVD = ctf.tensor((I,J,K),sp=sparse_format)
-    T_SVD.fill_sp_random(0,1,sparsity)
-    #T_SVD = function_tensor(I,J,K,sparsity)
+    #T_SVD = ctf.tensor((I,J,K),sp=sparse_format)
+    #T_SVD.fill_sp_random(0,1,sparsity)
+    T_SVD = function_tensor(I,J,K,sparsity)
     assert(T_SVD.sp == sparse_format)
  
     #omega = updateOmega(T_SVD,I,J,K)

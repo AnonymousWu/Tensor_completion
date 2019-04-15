@@ -7,7 +7,7 @@ import numpy.linalg as la
 from ctf import random as crandom
 glob_comm = ctf.comm()
 #from scipy.sparse.linalg import lsqr as lsqr
-#import sys
+import sys
 #sys.path.append('../data/function_tensor')
 #from function_tensor import *
 from math import sqrt
