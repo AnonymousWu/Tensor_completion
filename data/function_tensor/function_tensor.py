@@ -29,11 +29,13 @@ def function_tensor(I, J, K, sparsity):
         v2 = v
         T2.i("ijk") << T.i("ijk") * v2.i(index[i])
 
-    T2 = ctf.power(T2, 0.5)
-    T2 = (-1.0) * T2
-
-    # T2 = ctf.exp(T2)
-
+    # T2 = ctf.power(T2, 0.5)
+    [inds, data] = T2.read_local_nnz()
+    data[:] **= .5
+    data[:] *= -1.
+    T2 = ctf.tensor(T2.shape,sp=True)
+    T2.write(inds,data)
+    
     return T2
 
 
