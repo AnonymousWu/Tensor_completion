@@ -1,11 +1,23 @@
 import gzip
-def read_frosst(file_name):
-	with gzip.open(file_name + '.tns.gz', 'rb') as f_in:
-		with open(file_name + '.tns', 'w') as f_out:
-			file_content = f_in.read().split('\n')
-			print(len(file_content))
-			for entry in file_content[:-1]:
-				i,j,k,v = entry.split(' ')
-				f_out.write('{} {} {} {}\n'.format(int(i)-1, int(j)-1, int(k)-1, v))
+import shutil
+import ctf
 
-read_frosst('nell-2')
+modify = False
+
+def read_from_frostt(file_name, I, J, K):
+
+	unzipped_file_name = file_name + '.tns'
+
+	with gzip.open(file_name + '.tns.gz', 'r') as f_in:
+		with open(unzipped_file_name, 'w') as f_out:
+			shutil.copyfileobj(f_in, f_out)
+
+	T_start = ctf.tensor((I+1, J+1, K+1), sp=True)
+	T_start.read_from_file(unzipped_file_name)
+	T = ctf.tensor((I,J,K), sp=True)
+	T[:,:,:] = T_start[1:,1:,1:]
+
+	if modify:
+		T.write_to_file(unzipped_file_name)
+
+	return T
