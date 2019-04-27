@@ -1,4 +1,14 @@
 import ctf
 import reader
-T = reader.read_from_frostt('nell-2', 12092, 9184, 28818)
-assert(T[0,182,606] == 1.0)
+import sys
+
+file_name = sys.argv[1]
+I = int(sys.argv[2])
+J = int(sys.argv[3])
+K = int(sys.argv[4])
+
+T = reader.read_from_frostt(file_name, I, J, K)
+if file_name == 'nell-2':
+	assert(T[0,182,606] == 1.0)
+elif file_name == 'amazon-reviews':
+	assert(T[0,305245,32024] == 1.0)
