@@ -163,4 +163,5 @@ def main():
     #T.write_to_file("T.txt")
     sparse_SGD(T, U, V, W, regParam, Omega, I, J, K, r, stepSize, sample_rate)
 
-main()
+if __name__ == '__main__':
+    main()
