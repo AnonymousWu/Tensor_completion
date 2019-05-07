@@ -77,7 +77,7 @@ def sparse_SGD(T, U, V, W, Lambda, omega, I, J, K, r, stepSize, sample_rate):
                 print(diff_norm, x, total_count, x/total_count)
                 # print(times)
 
-            if abs(curr_err_norm - next_err_norm) < .001 or iteration_count > work_cycle * 0:
+            if abs(curr_err_norm - next_err_norm) < .001 or iteration_count > work_cycle * 15:
                 break
 
             curr_err_norm = next_err_norm
