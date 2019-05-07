@@ -7,8 +7,8 @@ import gzip
 import shutil
 import os
 
-sys.path.append('/../SGD')
-from gradient1.py import *
+sys.path.insert(0, '../SGD')
+from gradient1 import *
 
 glob_comm = ctf.comm()
 
@@ -60,11 +60,12 @@ def creat_perfect_tensor(I, J, K, r, sparsity):
 
 def main():
     #generate tensor
-    file_name = sys.argv[1]
+    sparsity = int(sys.argv[1])
     I = int(sys.argv[2])
     J = int(sys.argv[3])
     K = int(sys.argv[4])
-    T = read_from_frostt(file_name, I, J, K)
+    T = ctf.tensor((I, J, K), sp=True)
+    T.fill_sp_random(0., 1., 1. / sparsity)
     # T.read_from_file("T.txt")
     Omega = getOmega(T)
     s = T.sum()
@@ -78,12 +79,12 @@ def main():
     W = ctf.random.random((K, r))
 
     #SGD CODE
-    stepSize = int(sys.argv[6])
-    sample_rate = float(sys.argv[7])
+    sgd_stepSize = float(sys.argv[6])
+    sgd_sample_rate = float(sys.argv[7])
     regParam = 0.00001
     if ctf.comm().rank() == 0:
         print("Begin SGD")
-    sparse_SGD(T, U, V, W, regParam, Omega, I, J, K, r, stepSize, sample_rate)
+    sparse_SGD(T, U, V, W, regParam, Omega, I, J, K, r, sgd_stepSize, sgd_sample_rate)
     if ctf.comm().rank() == 0:
         print("End SGD")
 
