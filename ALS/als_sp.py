@@ -310,7 +310,7 @@ def getALS_CG(T,U,V,W,regParam,omega,I,J,K,r,block_size,num_iter=100,err_thresh=
         
         it += 1
         
-        if abs(curr_err_norm - next_err_norm) < err_thresh or it > num_iter:
+        if abs(curr_err_norm - next_err_norm) < err_thresh or it >= num_iter:
             break
 
         curr_err_norm = next_err_norm
@@ -318,7 +318,7 @@ def getALS_CG(T,U,V,W,regParam,omega,I,J,K,r,block_size,num_iter=100,err_thresh=
     t_ALS_CG.end()
     
     if glob_comm.rank() == 0:
-        print('Time/Iteration: {}'.format((time.time() - t_before_loop)/1))
+        print('Time: {}'.format((time.time() - t_before_loop)/1))
         print("Number of iterations: %d" % (it))
     
 
@@ -348,9 +348,9 @@ def main():
     r = 2 
     sparsity = .000001
     regParam = .1
-    block_size = 100
+    block_size = 1000
     use_func = 0
-    num_iter = 20
+    num_iter = 1
     err_thresh = .001
     run_implicit = 1
     run_explicit = 1
@@ -416,5 +416,7 @@ def main():
 
 
 
-main()
+#main()
+if __name__ == '__main__':
+    main()
 
