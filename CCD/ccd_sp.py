@@ -39,7 +39,7 @@ def function_tensor(I, J, K, sparsity):
     data[:] *= -1.
     T2 = ctf.tensor(T2.shape,sp=True)
     T2.write(inds,data)
-    
+
     return T2
 
 def getOmegaOld(T):
@@ -47,7 +47,7 @@ def getOmegaOld(T):
         omegactf = ((T != 0)*ctf.astensor(1.))
     else:
         omegactf = T / T
-    
+
     return omegactf
 
 def getOmega(T):
@@ -138,7 +138,7 @@ def run_CCD(T,U,V,W,omega,regParam,num_iter,time_limit,objective_frequency):
 
 
         for f in range(r):
-            
+
             # update U[:,f]
             if glob_comm.rank() == 0 and status_prints == True:
                 print('updating U[:,{}]'.format(f))
@@ -146,16 +146,16 @@ def run_CCD(T,U,V,W,omega,regParam,num_iter,time_limit,objective_frequency):
             t0 = time.time()
             # alphas = ctf.einsum('ijk, j, k -> i', R, V[:,f], W[:,f])
             alphas = ctf.einsum('ijk, j, k -> i', R, V_vec_list[f], W_vec_list[f])
-            
+
             t1 = time.time()
 
             # betas = ctf.einsum('ijk, j, j, k, k -> i', omega, V[:,f], V[:,f], W[:,f], W[:,f])
             betas = ctf.einsum('ijk, j, j, k, k -> i', omega, V_vec_list[f], V_vec_list[f], W_vec_list[f], W_vec_list[f])
             # betas = ctf.tensor(I,)
             # betas.i("i") << V[:,f].i("j")*W[:,f].i("k")*ctf.TTTP(omega, [None,V[:,f],W[:,f]]).i("ijk")
-            
+
             t2 = time.time()
-            
+
             # U[:,f] = alphas / (regParam + betas)
             U_vec_list[f] = alphas / (regParam + betas)
             U[:,f] = U_vec_list[f]
@@ -173,7 +173,7 @@ def run_CCD(T,U,V,W,omega,regParam,num_iter,time_limit,objective_frequency):
 
             # betas = ctf.einsum('ijk, i, i, k, k -> j', omega, U[:,f], U[:,f], W[:,f], W[:,f])
             betas = ctf.einsum('ijk, i, i, k, k -> j', omega, U_vec_list[f], U_vec_list[f], W_vec_list[f], W_vec_list[f])
-            
+
             # V[:,f] = alphas / (regParam + betas)
             V_vec_list[f] = alphas / (regParam + betas)
             V[:,f] = V_vec_list[f]
@@ -187,7 +187,7 @@ def run_CCD(T,U,V,W,omega,regParam,num_iter,time_limit,objective_frequency):
 
             # betas = ctf.einsum('ijk, i, i, j, j -> k', omega, U[:,f], U[:,f], V[:,f], V[:,f])
             betas = ctf.einsum('ijk, i, i, j, j -> k', omega, U_vec_list[f], U_vec_list[f], V_vec_list[f], V_vec_list[f])
-            
+
             # W[:,f] = alphas / (regParam + betas)
             W_vec_list[f] = alphas / (regParam + betas)
             W[:,f] = W_vec_list[f]
@@ -212,7 +212,7 @@ def run_CCD(T,U,V,W,omega,regParam,num_iter,time_limit,objective_frequency):
             # print(R)
             # exit(0)
         t_iR_upd.stop()
-        
+
         ite += 1
 
         if ite == num_iter or time.time() - t_before_loop - t_obj_calc > time_limit:
@@ -270,7 +270,7 @@ def main():
     assert(omega.sp)
     # print(T.sum(), omega.sum())
 
-    
+
     if glob_comm.rank() == 0:
         print('getOmega takes {}'.format(time.time() - t0))
 
@@ -287,3 +287,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

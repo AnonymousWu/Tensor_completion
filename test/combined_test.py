@@ -81,7 +81,7 @@ def create_function_tensor(I, J, K, sp_frac, use_sp_rep):
     data[:] *= -1.
     T2 = ctf.tensor(T2.shape,sp=use_sp_rep)
     T2.write(inds,data)
-    
+
     return T2
 
 if __name__ == "__main__":
@@ -94,7 +94,7 @@ if __name__ == "__main__":
     J = args.J
     K = args.K
     R = args.R
-    
+
     numiter_ALS_imp = args.num_iter_ALS_implicit
     numiter_ALS_exp = args.num_iter_ALS_explicit
     numiter_CCD = args.num_iter_CCD
@@ -114,7 +114,7 @@ if __name__ == "__main__":
     sample_frac_SGD = args.sample_frac_SGD
     use_func_tsr = args.function_tensor
     tensor_file = args.tensor_file
-    
+
 
     if use_func_tsr == True:
         if ctf.comm().rank() == 0:
@@ -135,7 +135,7 @@ if __name__ == "__main__":
         print("Dense tensor shape is",T.shape)
 
     print("Computing tensor completion with CP rank",R)
-     
+
     omega = getOmega(T)
     U = ctf.random.random((I, R))
     V = ctf.random.random((J, R))
@@ -149,7 +149,7 @@ if __name__ == "__main__":
         V_copy = ctf.copy(V)
         W_copy = ctf.copy(W)
 
-        getALS_CG(T,U_copy,V_copy,W_copy,reg_ALS,omega,I,J,K,R,block_size_ALS_imp,numiter_ALS_imp,err_thresh,time_limit,True) 
+        getALS_CG(T,U_copy,V_copy,W_copy,reg_ALS,omega,I,J,K,R,block_size_ALS_imp,numiter_ALS_imp,err_thresh,time_limit,True)
 
     if numiter_ALS_exp > 0:
         if ctf.comm().rank() == 0:
@@ -159,7 +159,7 @@ if __name__ == "__main__":
         V_copy = ctf.copy(V)
         W_copy = ctf.copy(W)
 
-        getALS_CG(T,U_copy,V_copy,W_copy,reg_ALS,omega,I,J,K,R,block_size_ALS_exp,numiter_ALS_exp,err_thresh,time_limit,False) 
+        getALS_CG(T,U_copy,V_copy,W_copy,reg_ALS,omega,I,J,K,R,block_size_ALS_exp,numiter_ALS_exp,err_thresh,time_limit,False)
 
 
     if numiter_CCD > 0:
@@ -172,7 +172,7 @@ if __name__ == "__main__":
 
         run_CCD(T,U_copy,V_copy,W_copy,omega,reg_CCD,numiter_CCD,time_limit,objfreq_CCD)
 
- 
+
     if numiter_SGD > 0:
         if ctf.comm().rank() == 0:
             print("Performing up to",numiter_SGD,"iterations or until reaching error threshold",err_thresh,"or reaching time limit of",time_limit,"seconds of SGD")
@@ -182,5 +182,6 @@ if __name__ == "__main__":
         W_copy = ctf.copy(W)
 
         sparse_SGD(T, U_copy, V_copy, W_copy, reg_SGD, omega, I, J, K, R, learn_rate, sample_frac_SGD, numiter_SGD, err_thresh, time_limit, objfreq_SGD)
+
 
 
