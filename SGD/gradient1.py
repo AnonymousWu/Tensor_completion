@@ -37,23 +37,29 @@ def sparse_update(T, factors, Lambda, sizes, rank, stepSize, sample_rate, times)
             R.set_zero()
     #return ctf.vecnorm(R) + (sum([ctf.vecnorm(f) for f in factors])) * Lambda
 
-def sparse_SGD(T, U, V, W, Lambda, omega, I, J, K, r, stepSize, sample_rate):
+def sparse_SGD(T, U, V, W, Lambda, omega, I, J, K, r, stepSize, sample_rate, num_iter, errThresh, time_limit, work_cycle):
     times = [0 for i in range(7)]
 
     iteration_count = 0
     total_count = 0
-    R = ctf.tensor((I, J, K), sp=True)
+    R = ctf.tensor((I, J, K), sp=T.sp)
+    if T.sp == True:
+        nnz_tot = T.nnz_tot
+    else:
+        nnz_tot = ctf.sum(omega)
     start_time = time.time()
     starting_time = time.time()
+    dtime = 0
     R.i("ijk") << T.i("ijk") - ctf.TTTP(omega, [U, V, W]).i("ijk")
     # R.i("ijk") << T.i("ijk") - U.i("iu") * V.i("ju") * W.i("ku") * omega.i("ijk")
     curr_err_norm = ctf.vecnorm(R) + (ctf.vecnorm(U) + ctf.vecnorm(V) + ctf.vecnorm(W)) * Lambda
     times[0] += time.time() - starting_time
     norm = [curr_err_norm]
-    work_cycle = int(1.0 / sample_rate)
+    #work_cycle = 1 #int(1.0 / sample_rate)
     step = stepSize * 0.5
+    t_obj_calc = 0.
 
-    while True:
+    while iteration_count < num_iter and time.time() - start_time - t_obj_calc < time_limit:
         iteration_count += 1
         starting_time = time.time()
         sampled_T = T.copy()
@@ -65,25 +71,39 @@ def sparse_SGD(T, U, V, W, Lambda, omega, I, J, K, r, stepSize, sample_rate):
         sampled_T.set_zero()
 
         if iteration_count % work_cycle == 0:
+            duration = time.time() - start_time - t_obj_calc
+            t_b_obj = time.time()
             total_count += 1
             R.set_zero()
             #R.i("ijk") << T.i("ijk") - U.i("iu") * V.i("ju") * W.i("ku") * omega.i("ijk")
             R.i("ijk") << T.i("ijk") - ctf.TTTP(omega, [U, V, W]).i("ijk")
             diff_norm = ctf.vecnorm(R)
+            RMSE = diff_norm/(nnz_tot**.5)
             next_err_norm = diff_norm + (ctf.vecnorm(U) + ctf.vecnorm(V) + ctf.vecnorm(W)) * Lambda
+            if glob_comm.rank() == 0:
+                print('Objective after',duration,'seconds (',iteration_count,'iterations) is: {}'.format(next_err_norm))
+                print('RMSE after',duration,'seconds (',iteration_count,'iterations) is: {}'.format(RMSE))
+            t_obj_calc += time.time() - t_b_obj
             #print(curr_err_norm, next_err_norm, diff_norm)
-            if ctf.comm().rank() == 0:
-                x = time.time() - start_time
-                print(diff_norm, x, total_count, x/total_count)
-                # print(times)
+            #if ctf.comm().rank() == 0:
+            #    x = time.time() - start_time
+            #    print(diff_norm, x, total_count, x/total_count)
+            #    # print(times)
 
-            if abs(curr_err_norm - next_err_norm) < .001 or iteration_count > work_cycle * 15:
+            if abs(curr_err_norm - next_err_norm) < errThresh:
                 break
 
             curr_err_norm = next_err_norm
             norm.append(curr_err_norm)
+
+    duration = time.time() - start_time - t_obj_calc
     if ctf.comm().rank() == 0:
-        print("Number of iterations: ", iteration_count)
+        print('SGD amortized seconds per sweep: {}'.format(duration/(iteration_count*sample_rate)))
+        print("Time/SGD iteration: {}".format(duration/iteration_count))
+    #curr_err_norm = ctf.vecnorm(R) + (ctf.vecnorm(U) + ctf.vecnorm(V) + ctf.vecnorm(W)) * Lambda
+    #R.i("ijk") << T.i("ijk") - ctf.TTTP(omega, [U, V, W]).i("ijk")
+    #if ctf.comm().rank() == 0:
+    #    print('Objective after',duration,'seconds is: {}'.format(curr_err_norm))
     return norm
 
 def getOmega(T):
@@ -161,7 +181,7 @@ def main():
     W = ctf.random.random((K, r))
 
     #T.write_to_file("T.txt")
-    sparse_SGD(T, U, V, W, regParam, Omega, I, J, K, r, stepSize, sample_rate)
+    sparse_SGD(T, U, V, W, regParam, Omega, I, J, K, r, stepSize, sample_rate, 100, 1.e-5, 1.E3, 30, 10)
 
 #main()
 if __name__ == '__main__':

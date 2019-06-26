@@ -5,7 +5,7 @@ import time
 import sys
 glob_comm = ctf.comm()
 import numpy as np
-status_prints = True
+status_prints = False
 use_function_tensor = False
 
 def function_tensor(I, J, K, sparsity):
@@ -47,7 +47,6 @@ def getOmegaOld(T):
         omegactf = ((T != 0)*ctf.astensor(1.))
     else:
         omegactf = T / T
-        assert(omegactf.sp)
     
     return omegactf
 
@@ -61,78 +60,37 @@ def getOmega(T):
     t_om.stop()
     return Omega
 
-def get_objective(T,U,V,W,I,J,K,omega,regParam):
+def get_objective(T,U,V,W,omega,regParam):
     t_obj = ctf.timer("ccd_get_objective")
     t_obj.start()
-    L = ctf.tensor((I,J,K), sp=True)
+    L = ctf.tensor(T.shape, sp=T.sp)
     t0 = time.time()
     L.i("ijk") << T.i("ijk") - ctf.TTTP(omega, [U,V,W]).i("ijk")
-    assert(L.sp)
     t1 = time.time()
-    objective = ctf.vecnorm(L) + (ctf.vecnorm(U) + ctf.vecnorm(V) + ctf.vecnorm(W)) * regParam
+    normL = ctf.vecnorm(L)
+    if T.sp == True:
+        RMSE = normL/(T.nnz_tot**.5)
+    else:
+        nnz_tot = ctf.sum(omega)
+        RMSE = normL/(nnz_tot**.5)
+    objective = normL + (ctf.vecnorm(U) + ctf.vecnorm(V) + ctf.vecnorm(W)) * regParam
     t2 = time.time()
     if glob_comm.rank() == 0 and status_prints == True:
         print('generate L takes {}'.format(t1 - t0))
         print('calc objective takes {}'.format(t2 - t1))
     t_obj.stop()
-    return objective
-
-def main():
-
-    sparsity = .1
-    r = 10
-    num_iter = 1
-    objective_frequency = 2
-
-    if len(sys.argv) >= 4:
-        I = int(sys.argv[1])
-        J = int(sys.argv[2])
-        K = int(sys.argv[3])
-    if len(sys.argv) >= 5:
-        sparsity = np.float64(sys.argv[4])
-    if len(sys.argv) >= 6:
-        r = int(sys.argv[5])
-    if len(sys.argv) >= 7:
-        num_iter = int(sys.argv[6])
-    if len(sys.argv) >= 8:
-    	objective_frequency = int(sys.argv[7])
-
-    if glob_comm.rank() == 0:
-        print("I is",I,"J is",J,"K is",K,"sparisty is",sparsity,"r is",r,"num_iter is",num_iter)
-
-    # sparsity = .001
-    regParam = .1
-
-    ctf.random.seed(42)
-
-    # # 3rd-order tensor
-    if not use_function_tensor:
-    	T = ctf.tensor((I,J,K), sp=True)
-    	T.fill_sp_random(0,1,sparsity)
-    else:
-    	T = function_tensor(I,J,K,sparsity)
-    assert(T.sp)
-
-    t0 = time.time()
-    omega = getOmega(T)
-    assert(omega.sp)
-    # print(T.sum(), omega.sum())
-
-    
-    if glob_comm.rank() == 0:
-        print('getOmega takes {}'.format(time.time() - t0))
+    return [objective, RMSE]
 
 
-    U = ctf.random.random((I, r))
-    V = ctf.random.random((J, r))
-    W = ctf.random.random((K, r))
+def run_CCD(T,U,V,W,omega,regParam,num_iter,time_limit,objective_frequency):
     U_vec_list = []
     V_vec_list = []
     W_vec_list = []
+    r = U.shape[1]
     for f in range(r):
-    	U_vec_list.append(U[:,f])
-    	V_vec_list.append(V[:,f])
-    	W_vec_list.append(W[:,f])
+        U_vec_list.append(U[:,f])
+        V_vec_list.append(V[:,f])
+        W_vec_list.append(W[:,f])
 
 
     # print(T)
@@ -143,6 +101,7 @@ def main():
     objectives = []
 
     t_before_loop = time.time()
+    t_obj_calc = 0.
 
     t_CCD = ctf.timer_epoch("ccd_CCD")
     t_CCD.begin()
@@ -152,25 +111,25 @@ def main():
         t_iR_upd.start()
         t0 = time.time()
         R = ctf.copy(T)
-        assert(R.sp)
         t1 = time.time()
         # R -= ctf.einsum('ijk, ir, jr, kr -> ijk', omega, U, V, W)
         R -= ctf.TTTP(omega, [U,V,W])
-        assert(R.sp)
         t2 = time.time()
         # R += ctf.einsum('ijk, i, j, k -> ijk', omega, U[:,0], V[:,0], W[:,0])
         R += ctf.TTTP(omega, [U[:,0], V[:,0], W[:,0]])
-        assert(R.sp)
         t3 = time.time()
 
         t_iR_upd.stop()
 
-        if status_prints == True and ite % objective_frequency == 0:
-        	objective = get_objective(T,U,V,W,I,J,K,omega,regParam)
-        	objectives.append(objective)
-        	if glob_comm.rank() == 0:
-        			print('Objective: {}'.format(objective))
-
+        t_b_obj = time.time()
+        if ite % objective_frequency == 0:
+          duration = time.time() - t_before_loop - t_obj_calc
+          [objective, RMSE] = get_objective(T,U,V,W,omega,regParam)
+          objectives.append(objective)
+          if glob_comm.rank() == 0:
+              print('Objective after',duration,'seconds (',ite,'iterations) is: {}'.format(objective))
+              print('RMSE after',duration,'seconds (',ite,'iterations) is: {}'.format(RMSE))
+        t_obj_calc += time.time() - t_b_obj
 
         if glob_comm.rank() == 0 and status_prints == True:
             print('ctf.copy() takes {}'.format(t1-t0))
@@ -245,10 +204,9 @@ def main():
             # R += ctf.einsum('ijk, i, j, k -> ijk', omega, U[:,f+1], V[:,f+1], W[:,f+1])
             # R += ctf.TTTP(omega, [U[:,f+1], V[:,f+1], W[:,f+1]])
             if f+1 < r:
-            	R += ctf.TTTP(omega, [U_vec_list[f+1], V_vec_list[f+1], W_vec_list[f+1]])
+                R += ctf.TTTP(omega, [U_vec_list[f+1], V_vec_list[f+1], W_vec_list[f+1]])
 
             t_tttp.stop()
-            assert(R.sp)
             # print(time.time() - t0)
 
             # print(R)
@@ -257,20 +215,75 @@ def main():
         
         ite += 1
 
-        if ite == num_iter:
+        if ite == num_iter or time.time() - t_before_loop - t_obj_calc > time_limit:
             break
 
     t_CCD.end()
-    objective = get_objective(T,U,V,W,I,J,K,omega,regParam)
+    duration = time.time() - t_before_loop - t_obj_calc
+    [objective, RMSE] = get_objective(T,U,V,W,omega,regParam)
 
     if glob_comm.rank() == 0:
-        print('Time/Iteration: {}'.format((time.time() - t_before_loop)/num_iter))
-        print('Objective: {}'.format(objective))
+        print('CCD amortized seconds per sweep: {}'.format(duration/(num_iter/r)))
+        print('Time/CCD Iteration: {}'.format(duration/num_iter))
+        print('Objective after',duration,'seconds (',ite,'iterations) is: {}'.format(objective))
+        print('RMSE after',duration,'seconds (',ite,'iterations) is: {}'.format(RMSE))
 
+
+
+def main():
+
+    sparsity = .1
+    r = 10
+    num_iter = 1
+
+    if len(sys.argv) >= 4:
+        I = int(sys.argv[1])
+        J = int(sys.argv[2])
+        K = int(sys.argv[3])
+    if len(sys.argv) >= 5:
+        sparsity = np.float64(sys.argv[4])
+    if len(sys.argv) >= 6:
+        r = int(sys.argv[5])
+    if len(sys.argv) >= 7:
+        num_iter = int(sys.argv[6])
+    if len(sys.argv) >= 8:
+        objective_frequency = int(sys.argv[7])
+
+    if glob_comm.rank() == 0:
+        print("I is",I,"J is",J,"K is",K,"sparisty is",sparsity,"r is",r,"num_iter is",num_iter)
+
+    # sparsity = .001
+    regParam = .1
+
+    ctf.random.seed(42)
+
+    # # 3rd-order tensor
+    if not use_function_tensor:
+        T = ctf.tensor((I,J,K), sp=True)
+        T.fill_sp_random(0,1,sparsity)
+    else:
+        T = function_tensor(I,J,K,sparsity)
+    assert(T.sp)
+
+    t0 = time.time()
+    omega = getOmega(T)
+    assert(omega.sp)
+    # print(T.sum(), omega.sum())
+
+    
+    if glob_comm.rank() == 0:
+        print('getOmega takes {}'.format(time.time() - t0))
+
+
+    U = ctf.random.random((I, r))
+    V = ctf.random.random((J, r))
+    W = ctf.random.random((K, r))
     # plt.plot(objectives)
     # plt.yscale('log')
     # plt.show()
     # print(len(objectives))
+
+    run_CCD(T,U,V,W,omega,regParam,num_iter,30,1)
 
 if __name__ == '__main__':
     main()

@@ -162,7 +162,6 @@ def updateFactor(T,U,V,W,regParam,omega,I,J,K,r,block_size,string,use_implicit):
             t_o_slice.start()
             nomega = omega[I_start : I_end,:,:]
             t_o_slice.stop()
-            assert(nomega.sp == sparse_format)
             x0 = ctf.random.random((bsize,r))
             b = ctf.tensor((bsize,r))
             t_RHS.start()
@@ -254,10 +253,9 @@ def solve(A,b,factor,r,regParam):
     return factor   
 
 
-def getALS_CG(T,U,V,W,regParam,omega,I,J,K,r,block_size,num_iter=100,err_thresh=.001,use_implicit=True):
+def getALS_CG(T,U,V,W,regParam,omega,I,J,K,r,block_size,num_iter=100,err_thresh=.001,time_limit=600,use_implicit=True):
 
 
-    t_before_loop = time.time()
 
     if use_implicit == True:
         t_ALS_CG = ctf.timer_epoch("als_CG_implicit")
@@ -267,17 +265,23 @@ def getALS_CG(T,U,V,W,regParam,omega,I,J,K,r,block_size,num_iter=100,err_thresh=
         t_ALS_CG = ctf.timer_epoch("als_CG_explicit")
         if ctf.comm().rank() == 0:
             print("--------------------------------ALS with explicit CG------------------------")
+    if T.sp == True:
+        nnz_tot = T.nnz_tot
+    else:
+        nnz_tot = ctf.sum(omega)
     t_ALS_CG.begin()
  
     it = 0
 
+    if block_size <= 0:
+        block_size = max(I,J,K)
+
     t_init_error_norm = ctf.timer("ALS_init_error_tensor_norm")
     t_init_error_norm.start()
     t0 = time.time()
-    E = ctf.tensor((I,J,K),sp=sparse_format)
+    E = ctf.tensor((I,J,K),sp=T.sp)
     #E.i("ijk") << T.i("ijk") - omega.i("ijk")*U.i("iu")*V.i("ju")*W.i("ku")
     E.i("ijk") << T.i("ijk") - ctf.TTTP(omega, [U,V,W]).i("ijk")
-    assert(E.sp == sparse_format)
     t1 = time.time()
     curr_err_norm = ctf.vecnorm(E) + (ctf.vecnorm(U) + ctf.vecnorm(V) + ctf.vecnorm(W))*regParam
     t2= time.time()
@@ -287,6 +291,8 @@ def getALS_CG(T,U,V,W,regParam,omega,I,J,K,r,block_size,num_iter=100,err_thresh=
             print('ctf.TTTP() takes {}'.format(t1-t0))
             print('ctf.vecnorm {}'.format(t2-t1))
     
+    t_before_loop = time.time()
+    t_obj_calc = 0.
     ctf.random.seed(42)
     while True:
 
@@ -296,32 +302,36 @@ def getALS_CG(T,U,V,W,regParam,omega,I,J,K,r,block_size,num_iter=100,err_thresh=
         U = updateFactor(T,U,V,W,regParam,omega,I,J,K,r,block_size,"U",use_implicit)
         V = updateFactor(T,U,V,W,regParam,omega,I,J,K,r,block_size,"V",use_implicit) 
         W = updateFactor(T,U,V,W,regParam,omega,I,J,K,r,block_size,"W",use_implicit)
-        
+
+        duration = time.time() - t_before_loop - t_obj_calc
+        t_b_obj = time.time()
         E.set_zero()
         #E.i("ijk") << T.i("ijk") - omega.i("ijk")*U.i("iu")*V.i("ju")*W.i("ku")
         E.i("ijk") << T.i("ijk") - ctf.TTTP(omega, [U,V,W]).i("ijk")
-        assert(E.sp == sparse_format)
-        next_err_norm = ctf.vecnorm(E) + (ctf.vecnorm(U) + ctf.vecnorm(V) + ctf.vecnorm(W))*regParam
+        diff_norm = ctf.vecnorm(E)
+        RMSE = diff_norm/(nnz_tot**.5)
+        next_err_norm = diff_norm + (ctf.vecnorm(U) + ctf.vecnorm(V) + ctf.vecnorm(W))*regParam
+        t_obj_calc += time.time() - t_b_obj
 
         t_upd_cg.stop()
 
-        if ctf.comm().rank() == 0:
-            print("Last residual:",curr_err_norm,"New residual",next_err_norm)
         
         it += 1
+        if ctf.comm().rank() == 0:
+            #print("Last residual:",curr_err_norm,"New residual",next_err_norm)
+            print('Objective after',duration,'seconds (',it,'iterations) is: {}'.format(next_err_norm))
+            print('RMSE after',duration,'seconds (',it,'iterations) is: {}'.format(RMSE))
         
-        if abs(curr_err_norm - next_err_norm) < err_thresh or it >= num_iter:
+        if abs(curr_err_norm - next_err_norm) < err_thresh or it >= num_iter or duration > time_limit:
             break
 
         curr_err_norm = next_err_norm
 
     t_ALS_CG.end()
+    duration = time.time() - t_before_loop - t_obj_calc
     
     if glob_comm.rank() == 0:
-        print('Time: {}'.format((time.time() - t_before_loop)/1))
-        print("Number of iterations: %d" % (it))
-    
-
+        print('ALS (implicit =',use_implicit,') time per sweep: {}'.format(duration/it))
 
 
 def getOmega_old(T,I,J,K):
@@ -335,7 +345,7 @@ def getOmega_old(T,I,J,K):
 def getOmega(T):
     [inds, data] = T.read_local_nnz()
     data[:] = 1.
-    Omega = ctf.tensor(T.shape,sp=sparse_format)
+    Omega = ctf.tensor(T.shape,sp=T.sp)
     Omega.write(inds,data)
     return Omega
 
@@ -390,12 +400,10 @@ def main():
         T_SVD = ctf.tensor((I,J,K),sp=sparse_format)
         T_SVD.fill_sp_random(0,1,sparsity)
     
-    assert(T_SVD.sp == sparse_format)
  
     #omega = updateOmega(T_SVD,I,J,K)
     t0 = time.time()
     omega = getOmega(T_SVD)
-    assert(omega.sp == sparse_format)
     if glob_comm.rank() == 0:
         print('getOmega takes {}'.format(time.time() - t0))
         
@@ -410,9 +418,9 @@ def main():
     T_CG = ctf.copy(T_SVD)
 
     if run_implicit == True:
-        getALS_CG(T_CG,U_CG,V_CG,W_CG,regParam,omega,I,J,K,r,block_size,num_iter,err_thresh,True) 
+        getALS_CG(T_CG,U_CG,V_CG,W_CG,regParam,omega,I,J,K,r,block_size,num_iter,err_thresh,600,True) 
     if run_explicit == True:
-        getALS_CG(T_SVD,U_SVD,V_SVD,W_SVD,regParam,omega,I,J,K,r,block_size,num_iter,err_thresh,False)
+        getALS_CG(T_SVD,U_SVD,V_SVD,W_SVD,regParam,omega,I,J,K,r,block_size,num_iter,err_thresh,600,False)
 
 
 
