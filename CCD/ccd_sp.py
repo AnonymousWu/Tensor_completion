@@ -1,6 +1,5 @@
 import ctf
 from ctf import random
-import matplotlib.pyplot as plt
 import time
 import sys
 glob_comm = ctf.comm()
@@ -223,8 +222,8 @@ def run_CCD(T,U,V,W,omega,regParam,num_iter,time_limit,objective_frequency):
     [objective, RMSE] = get_objective(T,U,V,W,omega,regParam)
 
     if glob_comm.rank() == 0:
-        print('CCD amortized seconds per sweep: {}'.format(duration/(num_iter/r)))
-        print('Time/CCD Iteration: {}'.format(duration/num_iter))
+        print('CCD amortized seconds per sweep: {}'.format(duration/ite))
+        print('Time/CCD Iteration: {}'.format(duration/ite))
         print('Objective after',duration,'seconds (',ite,'iterations) is: {}'.format(objective))
         print('RMSE after',duration,'seconds (',ite,'iterations) is: {}'.format(RMSE))
 
