@@ -63,26 +63,25 @@ def create_lowr_tensor(I, J, K, r, sp_frac, use_sp_rep):
 
 def create_function_tensor(I, J, K, sp_frac, use_sp_rep):
     T = ctf.tensor((I, J, K), sp=use_sp_rep)
-    T2 = ctf.tensor((I, J, K), sp=use_sp_rep)
-
     T.fill_sp_random(1, 1, sp_frac)
 
     sizes = [I, J, K]
     index = ["i", "j", "k"]
+    vs = []
 
     for i in range(3):
         n = sizes[i]
         v = np.linspace(-1, 1, n)
-        v = ctf.astensor(v ** 2)
-        T2.i("ijk") << T.i("ijk") * v.i(index[i])
+        vs.append(ctf.astensor(v ** 2))
+    T = ctf.TTTP(T,vs)
 
-    [inds, data] = T2.read_local_nnz()
+    [inds, data] = T.read_local_nnz()
     data[:] **= .5
     data[:] *= -1.
-    T2 = ctf.tensor(T2.shape,sp=use_sp_rep)
-    T2.write(inds,data)
+    T = ctf.tensor(T.shape,sp=use_sp_rep)
+    T.write(inds,data)
 
-    return T2
+    return T
 
 if __name__ == "__main__":
 
@@ -129,12 +128,13 @@ if __name__ == "__main__":
             print("Generating",sp_frac,"sampled low rank tensor")
         T = create_lowr_tensor(I, J, K, R, sp_frac, use_sp_rep)
 
-    if T.sp:
-        print("Sparse tensor shape is",T.shape,"nonzero count is",T.nnz_tot)
-    else:
-        print("Dense tensor shape is",T.shape)
+    if ctf.comm().rank() == 0:
+        if T.sp:
+            print("Sparse tensor shape is",T.shape,"nonzero count is",T.nnz_tot)
+        else:
+            print("Dense tensor shape is",T.shape)
 
-    print("Computing tensor completion with CP rank",R)
+        print("Computing tensor completion with CP rank",R)
 
     omega = getOmega(T)
     U = ctf.random.random((I, R))
