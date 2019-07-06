@@ -14,6 +14,7 @@ sys.path.insert(0, '../ALS')
 from als_sp import getALS_CG
 sys.path.insert(0, '../CCD')
 from ccd_sp import run_CCD
+from ccd_sp import get_objective
 
 glob_comm = ctf.comm()
 
@@ -140,6 +141,10 @@ if __name__ == "__main__":
     U = ctf.random.random((I, R))
     V = ctf.random.random((J, R))
     W = ctf.random.random((K, R))
+
+    [_, RMSE] = get_objective(T,U,V,W,omega,0)
+    if ctf.comm().rank() == 0:
+        print("Initial RMSE is",RMSE)
 
     if numiter_ALS_imp > 0:
         if ctf.comm().rank() == 0:
