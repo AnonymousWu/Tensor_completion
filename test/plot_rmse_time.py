@@ -20,8 +20,8 @@ def parse_output(file_name):
 
 def plot_each():
 	for i in range(len(method)):
-		plt.plot(rmse[i], time[i], 'ro')
-		plt.plot(rmse[i], time[i])
+		plt.plot(time[i], rmse[i], 'ro')
+		plt.plot(time[i], rmse[i])
 		plt.title(method[i])
 		plt.xlabel('Time')
 		plt.ylabel('RMSE')
@@ -29,8 +29,8 @@ def plot_each():
 
 def plot_together():
 	for i in range(len(method)):
-		plt.plot(rmse[i], time[i], 'ro')
-		plt.plot(rmse[i], time[i], label=method[i])
+		plt.plot(time[i], rmse[i], 'ro')
+		plt.plot(time[i], rmse[i], label=method[i])
 	plt.xlabel('Time')
 	plt.ylabel('RMSE')
 	plt.legend()
