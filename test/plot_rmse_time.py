@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import matplotlib.lines as mlines
 
 method = []
 rmse = []
@@ -32,14 +33,17 @@ def plot_each():
         plt.show()
 
 def plot_together():
+    colors = ['r', 'b', 'g', 'brown']
+    linestyles = ['--', '-.', ':', '-']
+    markers = ['s', 'x', '^', 'd']
     for i in range(len(method)):
-        plt.plot(time[i], rmse[i], 'ro')
-        plt.plot(time[i], rmse[i], label=method[i])
+        plt.plot(time[i], rmse[i], color=colors[i], linestyle=linestyles[i], marker=markers[i], label=method[i])
     plt.xlabel('Time')
     plt.ylabel('RMSE')
-    plt.legend()
+    plt.legend(loc='best')
+    plt.grid(linestyle='--')
     plt.show()
 
 parse_output('out.txt')
-plot_each()
+#plot_each()
 plot_together()
