@@ -53,7 +53,7 @@ def add_general_arguments(parser):
         type=float,
         default=30,
         metavar='float',
-        help='Number of seconds after which to terminate tests for either ALS, SGD, or CCD if number of iterations is not exceeded (default: 600)')
+        help='Number of seconds after which to terminate tests for either ALS, SGD, or CCD if number of iterations is not exceeded (default: 30)')
     parser.add_argument(
         '--obj-freq-CCD',
         type=int,
