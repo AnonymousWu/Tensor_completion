@@ -1,0 +1,31 @@
+First, download the data from this URL: https://archive.org/download/nf_prize_dataset.tar/nf_prize_dataset.tar.gz
+To download on stampede2, use
+wget https://archive.org/download/nf_prize_dataset.tar/nf_prize_dataset.tar.gz
+
+Next, to unzip it, use
+tar -xvzf nf_prize_dataset.tar.gz
+cd download
+tar -xvf training_set.tar
+
+The parser is now on GitHub at Tensor_completion/data/parse_netflix.py
+git pull it and put it in the download directory(the directory of the unzipped downloaded file)
+
+One parameter to adjust is the first line in the code:
+movie_count = 17770
+the total size of this tensor is 480189  17770  2182 (UID, MOVIE, DATE) which is very large
+you can use a subset of this tensor by setting the movie_count to a small number and it will generate a much smaller tensor(Fewer movies, fewer dates, fewer UIDs)
+you can also modify the output name which is at line 53, right now the default is “tensor.txt”
+
+To run the code simply use
+python3 parse_netflix.py
+in the download directory
+
+The output will look like this when finished:
+480189 17770 2182
+finished
+
+the three numbers are the dimensions size of the generated tensor
+now to use the tensor for benchmarking, use these three numbers:
+
+T = ctf.tensor((480189, 17770, 2182), sp=True)
+T.read_from_file(“download/tensor.txt”)
