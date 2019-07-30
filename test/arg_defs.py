@@ -59,13 +59,13 @@ def add_general_arguments(parser):
         type=int,
         default=1,
         metavar='int',
-        help='Number of iterations after which to calculate objective (time for objective calculation not included in time limit) for CCD (default: 3)')
+        help='Number of iterations after which to calculate objective (time for objective calculation not included in time limit) for CCD (default: 1)')
     parser.add_argument(
         '--obj-freq-SGD',
         type=int,
-        default=10,
+        default=1,
         metavar='int',
-        help='Number of iterations after which to calculate objective (time for objective calculation not included in time limit) for SGD (default: 10)')
+        help='Number of iterations after which to calculate objective (time for objective calculation not included in time limit) for SGD (default: 1)')
     parser.add_argument(
         '--err-thresh',
         type=float,
