@@ -30,7 +30,6 @@ def sparse_update(T, factors, Lambda, sizes, rank, stepSize, sample_rate, times)
         starting_time = time.time()
         #H.i(indexes[:i] + indexes[i + 1:] + "r") << 
         Hterm = reduce(lambda x, y: x * y, tup_list[:i] + tup_list[i + 1:])
-
         times[5] += time.time() - starting_time
         starting_time = time.time()
         factors[i].i(indexes[i] + "r") << - stepSize * (2 * Lambda * sample_rate * factors[i].i(indexes[i] + "r") - Hterm * R.i(indexes))
