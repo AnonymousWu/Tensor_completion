@@ -144,12 +144,14 @@ def run_CCD(T,U,V,W,omega,regParam,num_iter,time_limit,objective_frequency):
 
             t0 = time.time()
             # alphas = ctf.einsum('ijk, j, k -> i', R, V[:,f], W[:,f])
-            alphas = ctf.einsum('ijk, j, k -> i', R, V_vec_list[f], W_vec_list[f])
+            # alphas = ctf.einsum('ijk, j, k -> i', R, V_vec_list[f], W_vec_list[f])
+            alphas = ctf.einsum('ijk -> i', ctf.TTTP(R, [None, V_vec_list[f], W_vec_list[f]]))
 
             t1 = time.time()
 
             # betas = ctf.einsum('ijk, j, j, k, k -> i', omega, V[:,f], V[:,f], W[:,f], W[:,f])
-            betas = ctf.einsum('ijk, j, j, k, k -> i', omega, V_vec_list[f], V_vec_list[f], W_vec_list[f], W_vec_list[f])
+            # betas = ctf.einsum('ijk, j, j, k, k -> i', omega, V_vec_list[f], V_vec_list[f], W_vec_list[f], W_vec_list[f])
+            alphas = ctf.einsum('ijk -> i', ctf.TTTP(R, [None, V_vec_list[f]*V_vec_list[f], W_vec_list[f]*W_vec_list[f]]))
             # betas = ctf.tensor(I,)
             # betas.i("i") << V[:,f].i("j")*W[:,f].i("k")*ctf.TTTP(omega, [None,V[:,f],W[:,f]]).i("ijk")
 
@@ -168,10 +170,12 @@ def run_CCD(T,U,V,W,omega,regParam,num_iter,time_limit,objective_frequency):
             if glob_comm.rank() == 0 and status_prints == True:
                 print('updating V[:,{}]'.format(f))
             # alphas = ctf.einsum('ijk, i, k -> j', R, U[:,f], W[:,f])
-            alphas = ctf.einsum('ijk, i, k -> j', R, U_vec_list[f], W_vec_list[f])
+            #alphas = ctf.einsum('ijk, i, k -> j', R, U_vec_list[f], W_vec_list[f])
+            alphas = ctf.einsum('ijk -> j', ctf.TTTP(R, [U_vec_list[f], None, W_vec_list[f]]))
 
             # betas = ctf.einsum('ijk, i, i, k, k -> j', omega, U[:,f], U[:,f], W[:,f], W[:,f])
-            betas = ctf.einsum('ijk, i, i, k, k -> j', omega, U_vec_list[f], U_vec_list[f], W_vec_list[f], W_vec_list[f])
+            # betas = ctf.einsum('ijk, i, i, k, k -> j', omega, U_vec_list[f], U_vec_list[f], W_vec_list[f], W_vec_list[f])
+            betas = ctf.einsum('ijk -> j', ctf.TTTP(R, [U_vec_list[f]*U_vec_list[f], None, W_vec_list[f]*W_vec_list[f]]))
 
             # V[:,f] = alphas / (regParam + betas)
             V_vec_list[f] = alphas / (regParam + betas)
@@ -182,10 +186,12 @@ def run_CCD(T,U,V,W,omega,regParam,num_iter,time_limit,objective_frequency):
             if glob_comm.rank() == 0 and status_prints == True:
                 print('updating W[:,{}]'.format(f))
             # alphas = ctf.einsum('ijk, i, j -> k', R, U[:,f], V[:,f])
-            alphas = ctf.einsum('ijk, i, j -> k', R, U_vec_list[f], V_vec_list[f])
+            # alphas = ctf.einsum('ijk, i, j -> k', R, U_vec_list[f], V_vec_list[f])
+            alphas = ctf.einsum('ijk -> k', ctf.TTTP(R, [U_vec_list[f], V_vec_list[f], None]))
 
             # betas = ctf.einsum('ijk, i, i, j, j -> k', omega, U[:,f], U[:,f], V[:,f], V[:,f])
-            betas = ctf.einsum('ijk, i, i, j, j -> k', omega, U_vec_list[f], U_vec_list[f], V_vec_list[f], V_vec_list[f])
+            # betas = ctf.einsum('ijk, i, i, j, j -> k', omega, U_vec_list[f], U_vec_list[f], V_vec_list[f], V_vec_list[f])
+            alphas = ctf.einsum('ijk -> k', ctf.TTTP(R, [U_vec_list[f]*U_vec_list[f], V_vec_list[f]*V_vec_list[f], None]))
 
             # W[:,f] = alphas / (regParam + betas)
             W_vec_list[f] = alphas / (regParam + betas)
