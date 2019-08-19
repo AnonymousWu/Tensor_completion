@@ -114,6 +114,7 @@ if __name__ == "__main__":
     sample_frac_SGD = args.sample_frac_SGD
     use_func_tsr = args.function_tensor
     tensor_file = args.tensor_file
+    use_CCD_TTTP = args.use_CCD_TTTP
 
 
     if use_func_tsr == True:
@@ -169,13 +170,13 @@ if __name__ == "__main__":
 
     if numiter_CCD > 0:
         if ctf.comm().rank() == 0:
-            print("Performing up to",numiter_CCD,"iterations, or reaching time limit of",time_limit,"seconds of CCD")
+            print("Performing up to",numiter_CCD,"iterations, or reaching time limit of",time_limit,"seconds of CCD with use of TTTP for contractions set to use_CCD_TTTP =",use_CCD_TTTP)
             print("CCD regularization parameter is",reg_CCD)
         U_copy = ctf.copy(U)
         V_copy = ctf.copy(V)
         W_copy = ctf.copy(W)
 
-        run_CCD(T,U_copy,V_copy,W_copy,omega,reg_CCD,numiter_CCD,time_limit,objfreq_CCD)
+        run_CCD(T,U_copy,V_copy,W_copy,omega,reg_CCD,numiter_CCD,time_limit,objfreq_CCD,use_CCD_TTTP)
 
 
     if numiter_SGD > 0:
