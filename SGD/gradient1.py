@@ -13,16 +13,19 @@ INDEX_STRING = "ijklmnopq"
 
 def sparse_update(T, factors, Lambda, sizes, rank, stepSize, sample_rate, times):
     starting_time = time.time()
+    t_go = ctf.timer("SGD_getOmega")
+    t_go.start()
     omega = getOmega(T)
+    t_go.stop()
     dimension = len(sizes)
     indexes = INDEX_STRING[:dimension]
-    R = ctf.tensor(tuple(sizes), sp = True)
+    R = ctf.tensor(copy=T) #ctf.tensor(tuple(sizes), sp = True)
     times[2] += time.time() - starting_time
     for i in range(dimension):
         tup_list = [factors[i].i(indexes[i] + "r") for i in range(dimension)]
         #R.i(indexes) << T.i(indexes) - omega.i(indexes) * reduce(lambda x, y: x * y, tup_list)
         starting_time = time.time()
-        R.i(indexes) << T.i(indexes) - ctf.TTTP(omega, factors).i(indexes)
+        R.i(indexes) << -1.* ctf.TTTP(omega, factors).i(indexes)
         times[3] += time.time() - starting_time
         starting_time = time.time()
         #H = ctf.tensor(tuple((sizes[:i] + sizes[i + 1:] + [rank])))
@@ -32,10 +35,13 @@ def sparse_update(T, factors, Lambda, sizes, rank, stepSize, sample_rate, times)
         Hterm = reduce(lambda x, y: x * y, tup_list[:i] + tup_list[i + 1:])
         times[5] += time.time() - starting_time
         starting_time = time.time()
-        factors[i].i(indexes[i] + "r") << - stepSize * (2 * Lambda * sample_rate * factors[i].i(indexes[i] + "r") - Hterm * R.i(indexes))
+        t_ctr = ctf.timer("SGD_main_contraction")
+        t_ctr.start()
+        (1- stepSize * 2 * Lambda * sample_rate)*factors[i].i(indexes[i] + "r") << stepSize * Hterm * R.i(indexes)
+        t_ctr.stop()
         times[6] += time.time() - starting_time
         if i < dimension - 1:
-            R.set_zero()
+            R = ctf.tensor(copy=T)
     #return ctf.vecnorm(R) + (sum([ctf.vecnorm(f) for f in factors])) * Lambda
 
 def sparse_SGD(T, U, V, W, Lambda, omega, I, J, K, r, stepSize, sample_rate, num_iter, errThresh, time_limit, work_cycle):
