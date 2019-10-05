@@ -28,22 +28,25 @@ def plot_each():
         plt.plot(time[i], rmse[i], 'ro')
         plt.plot(time[i], rmse[i])
         plt.title(method[i])
-        plt.xlabel('Time')
-        plt.ylabel('RMSE')
+        plt.xlabel('Time (seconds)')
+        plt.ylabel('RMSE (average error)')
         plt.show()
 
 def plot_together():
+    plt.figure(figsize=(7,4))
     colors = ['r', 'b', 'g', 'brown']
     linestyles = ['--', '-.', ':', '-']
     markers = ['s', 'x', '^', 'd']
-    for i in range(len(method)):
+    for i in range(len(method))[::-1]:
         plt.plot(time[i], rmse[i], color=colors[i], linestyle=linestyles[i], marker=markers[i], label=method[i])
-    plt.xlabel('Time')
-    plt.ylabel('RMSE')
+    plt.title('Tensor Completion using Cyclops on 4096 Cores of Stampede2')
+    plt.xlabel('Time (seconds)')
+    plt.ylabel('RMSE (average entrywise model error)')
+    plt.yscale("log")
     plt.legend(loc='best')
     plt.grid(linestyle='--')
     plt.show()
 
-parse_output('out.txt')
+parse_output('pp.bench.ss.N64.func.out')
 #plot_each()
 plot_together()
